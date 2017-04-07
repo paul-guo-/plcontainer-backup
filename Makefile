@@ -71,9 +71,8 @@ install-extra: xmlconfig
 installcheck:
 	$(MAKE) -C tests tests
 
-.PHONY: installcheck4
-installcheck4:
-	$(MAKE) -C tests tests4
+installcheckpostgres:
+	$(MAKE) -C tests postgres
 
 .PHONY: clients
 clients:

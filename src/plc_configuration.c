@@ -93,7 +93,7 @@ static int parse_container(xmlNode *node, plcContainer *cont) {
     }
 
     if (has_name == 0) {
-        elog(ERROR, "Container name in tag <name> must be specified in configuartion");
+        elog(ERROR, "Container name in tag <name> must be specified in configuration");
         return -1;
     }
 
@@ -246,6 +246,7 @@ static void print_containers(plcContainer *cont, int size) {
 int plc_read_container_config(bool verbose) {
     xmlDoc *doc = NULL;
     char filename[1024];
+    const char *data_directory;
     
     /*
      * this initialize the library and check potential ABI mismatches
@@ -253,6 +254,8 @@ int plc_read_container_config(bool verbose) {
      * library used.
      */
     LIBXML_TEST_VERSION
+
+	data_directory = GetConfigOption("data_directory", false, true);
 
     /* Parse the file and get the DOM */
     sprintf(filename, "%s/plcontainer_configuration.xml", data_directory);

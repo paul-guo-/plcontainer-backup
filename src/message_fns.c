@@ -33,7 +33,12 @@ interpreted as representing official policies, either expressed or implied, of t
 /* Greenplum headers */
 #include "postgres.h"
 #include "executor/spi.h"
+#include "access/htup_details.h"
 #include "access/transam.h"
+#include "catalog/pg_proc.h"
+#include "catalog/pg_type.h"
+#include "utils/syscache.h"
+#include "utils/builtins.h"
 
 /* message and function definitions */
 #include "common/comm_utils.h"

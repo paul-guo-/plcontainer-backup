@@ -15,6 +15,8 @@
 
 #include "postgres.h"
 #include "regex/regex.h"
+#include "catalog/pg_collation.h"
+
 
 #include "plc_docker_api.h"
 #include "plc_configuration.h"
@@ -100,7 +102,11 @@ static int docker_parse_container_id(char* response, char **name) {
     mask = (pg_wchar *) palloc((masklen + 1) * sizeof(pg_wchar));
     wmasklen = pg_mb2wchar_with_len(plc_docker_containerid_regex, mask, masklen);
 
-    res = pg_regcomp(&preg, mask, wmasklen, REG_ADVANCED);
+    res = pg_regcomp(&preg, mask, wmasklen, REG_ADVANCED
+#ifndef GP_VERSION
+    		,DEFAULT_COLLATION_OID
+#endif
+    	);
     pfree(mask);
     if (res < 0) {
         elog(ERROR, "Cannot compile Postgres regular expression: '%s'", strerror(errno));
@@ -166,7 +172,11 @@ static int docker_parse_port_mapping(char* response, int *port) {
     mask = (pg_wchar *) palloc((masklen + 1) * sizeof(pg_wchar));
     wmasklen = pg_mb2wchar_with_len(plc_docker_port_regex, mask, masklen);
 
-    res = pg_regcomp(&preg, mask, wmasklen, REG_ADVANCED);
+    res = pg_regcomp(&preg, mask, wmasklen, REG_ADVANCED
+#ifndef GP_VERSION
+    		,DEFAULT_COLLATION_OID
+#endif
+			);
     pfree(mask);
     if (res < 0) {
         elog(ERROR, "Cannot compile Postgres regular expression: '%s'", strerror(errno));

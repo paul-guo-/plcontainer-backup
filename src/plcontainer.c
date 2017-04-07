@@ -15,6 +15,7 @@
 #include "executor/spi.h"
 #include "commands/trigger.h"
 
+
 /* PLContainer Headers */
 #include "common/comm_channel.h"
 #include "common/messages/messages.h"
@@ -73,7 +74,11 @@ Datum plcontainer_call_handler(PG_FUNCTION_ARGS) {
     PG_CATCH();
     {
         /* If the reason is Cancel or Termination */
-        if (InterruptPending || QueryCancelPending || QueryFinishPending) {
+        if (InterruptPending || QueryCancelPending
+#ifdef GP_VERSION
+        		|| QueryFinishPending
+#endif
+				) {
             //elog(DEBUG1, "Terminating containers due to user request");
             stop_containers();
         }

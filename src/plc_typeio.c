@@ -10,13 +10,19 @@
 /* Greenplum headers */
 #include "postgres.h"
 #include "fmgr.h"
+#ifndef GP_VERSION
+#include "access/htup_details.h"
+#endif
 #include "access/transam.h"
 #include "access/tupmacs.h"
+#include "catalog/pg_type.h"
 #include "executor/spi.h"
 #include "parser/parse_type.h"
 #include "utils/fmgroids.h"
 #include "utils/array.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "utils/syscache.h"
 #include "utils/typcache.h"
 
 #include "plcontainer.h"
@@ -55,6 +61,10 @@ static Datum plc_datum_from_bytea_ptr(char *input, plcTypeInfo *type);
 static Datum plc_datum_from_array(char *input, plcTypeInfo *type);
 static Datum plc_datum_from_udt(char *input, plcTypeInfo *type);
 static Datum plc_datum_from_udt_ptr(char *input, plcTypeInfo *type);
+
+#ifndef GP_VERSION
+typedef FormData_pg_type *Form_pg_type;
+#endif
 
 static void fill_type_info_inner(FunctionCallInfo fcinfo, Oid typeOid, plcTypeInfo *type, bool isArrayElement, bool isUDTElement) {
     HeapTuple     typeTup;
