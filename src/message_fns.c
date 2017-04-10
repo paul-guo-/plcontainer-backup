@@ -37,6 +37,7 @@ interpreted as representing official policies, either expressed or implied, of t
 #include "access/transam.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#include "utils/array.h"
 #include "utils/syscache.h"
 #include "utils/builtins.h"
 

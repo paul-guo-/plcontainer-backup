@@ -9,7 +9,8 @@
 PGXS := $(shell pg_config --pgxs)
 include $(PGXS)
 
-REGRESS_OPTS = --dbname=$(PL_TESTDB) --init-file=./init_file
+GPDBREGRESS_OPTS = --dbname=$(PL_TESTDB) --init-file=./init_file
+PSQLREGRES_OPTS = --dbname=$(PL_TESTDB)
 
 # R Regression Tests
 REGRESS_R = plcontainer_function_r plcontainer_function_r_gpdb5 \
@@ -23,11 +24,16 @@ REGRESS_PYTHON = plcontainer_function_python plcontainer_function_python_gpdb5 \
  				 plcontainer_test_python3 plcontainer_test_python3_gpdb5 \
  				 plcontainer_test_anaconda3
 
+REGRESS_PYTHON_POSTGRES = plcontainer_function_python \
+				 plcontainer_test_python_postgres plcontainer_test_anaconda \
+				 plcontainer_function_python3 plcontainer_test_python3_postgres \
+ 				 plcontainer_test_anaconda3
+ 				 
 # Regression Tests for GPDB5
 REGRESS_GPDB5 = plcontainer_install plcontainer_schema $(REGRESS_PYTHON) $(REGRESS_R)
 
-# Regression Tests for GPDB4
-REGRESS_POSTGRES = plcontainer_install plcontainer_schema $(REGRESS_PYTHON) $(REGRESS_R)
+# Regression Tests for PostgreSQL
+REGRESS_POSTGRES = plcontainer_install_postgres plcontainer_schema_postgres $(REGRESS_PYTHON_POSTGRES) $(REGRESS_R)
 
 PSQLDIR = $(bindir)
 
@@ -64,12 +70,12 @@ prepare:
 .PHONY: tests
 tests: prepare
 	$(top_builddir)/src/test/regress/pg_regress \
-				--psqldir=$(PSQLDIR) $(REGRESS_OPTS) $(REGRESS_GPDB5)
+				--psqldir=$(PSQLDIR) $(GPDBREGRESS_OPTS) $(REGRESS_GPDB5)
 
 .PHONY: postgres
 postgres: prepare
 	$(top_builddir)/src/test/regress/pg_regress \
-				 $(REGRESS_OPTS) $(REGRESS_GPDB5)
+				 --bindir=$(PSQLDIR) $(PSQLREGRESS_OPTS) $(REGRESS_POSTGRES)
 
 .PHONY: submake
 submake:
