@@ -29,10 +29,48 @@ static int plcBufferMaybeFlush (plcConn *conn, bool isForse);
 static int plcBufferMaybeReset (plcConn *conn, int bufType);
 static int plcBufferMaybeResize (plcConn *conn, int bufType, size_t bufAppend);
 
+#ifdef USE_SHM
+static void write_buf_head_room(plcBuffer *buf)
+{
+	int *data_info = buf->data - 8;
+
+	data_info[0] = buf->pStart;
+	data_info[1] = buf->pEnd;
+}
+
+static void read_buf_head_room(plcBuffer *buf)
+{
+	int *data_info = buf->data - 8;
+
+	buf->pStart = data_info[0];
+	buf->pEnd = data_info[1];
+}
+#endif
+
+#ifdef USE_SHM
+static char rx_oct;
+#endif
+
 /*
  *  Read data from the socket
  */
 static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
+#ifdef USE_SHM
+    ssize_t sz;
+    plcBuffer *buf = conn->buffer[PLC_INPUT_BUFFER];
+
+	do {
+        sz = recv(conn->sock, &rx_oct, 1, 0);
+	} while (sz < 0 && errno = EINTR);
+
+	if (sz < 0)
+        lprintf(ERROR, "%s(), errno: %d", __func__, sz);
+
+	read_buf_head_room(buf);
+
+	/* ret value means nothing for us. */
+	return 1;
+#else
     ssize_t sz = 0;
 
     while (sz <= 0) {
@@ -50,12 +88,33 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
     }
 
     return sz;
+#endif
 }
+
+#ifdef USE_SHM
+static const char tx_oct = '0';
+#endif
 
 /*
  *  Write data to the socket
  */
 static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
+#ifdef USE_SHM
+    ssize_t sz;
+    plcBuffer *buf = conn->buffer[PLC_OUTPUT_BUFFER];
+
+	write_buf_head_room(buf);
+
+    do {
+		sz = send(conn->sock, &tx_oct, 1, 0);
+	} while (sz < 0 && errno == EINTR);
+
+	if (sz < 0)
+        lprintf(ERROR, "%s(), errno: %d", __func__, sz);
+
+	return len;
+
+#else
     ssize_t sz = send(conn->sock, ptr, len, 0);
 
     /* If receive command is terminated by SIGINT */
@@ -64,6 +123,7 @@ static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
     }
 
     return sz;
+#endif
 }
 
 /*
@@ -135,6 +195,10 @@ static int plcBufferMaybeReset (plcConn *conn, int bufType) {
         buf->pStart = 0;
     }
 
+#ifdef USE_SHM
+	write_buf_head_room(buf);
+#endif
+
     return 0;
 }
 
@@ -163,7 +227,11 @@ static int plcBufferMaybeResize (plcConn *conn, int bufType, size_t bufAppend) {
         // Buffer size is twice as large as the data we need to hold, rounded
         // to the nearest PLC_BUFFER_SIZE bytes
         newSize = ((dataSize * 2) / PLC_BUFFER_SIZE + 1) * PLC_BUFFER_SIZE;
+#ifdef USE_SHM
+        newBuffer = NULL;
+#else
         newBuffer = (char*)plc_top_alloc(newSize);
+#else
         if (newBuffer == NULL) {
             lprintf(ERROR, "plcBufferMaybeFlush: Cannot allocate %d bytes "
                            "for output buffer", newSize);
@@ -177,7 +245,11 @@ static int plcBufferMaybeResize (plcConn *conn, int bufType, size_t bufAppend) {
     else if (buf->pEnd + (int)bufAppend > buf->bufSize - PLC_BUFFER_MIN_FREE) {
         // Growing the buffer we need to just hold all the data we receive
         newSize = (dataSize / PLC_BUFFER_SIZE + 1) * PLC_BUFFER_SIZE;
+#ifdef USE_SHM
+        newBuffer = NULL;
+#else
         newBuffer = (char*)plc_top_alloc(newSize);
+#endif
         if (newBuffer == NULL) {
             lprintf(ERROR, "plcBufferMaybeGrow: Cannot allocate %d bytes for buffer",
                            newSize);
@@ -276,6 +348,9 @@ int plcBufferReceive (plcConn *conn, size_t nBytes) {
 
     // If we don't have enough data in the buffer already
     if (buf->pEnd - buf->pStart < (int)nBytes) {
+#ifdef USE_SHM
+		plcSocketRecv(conn, NULL, 0);
+#else
         int nBytesToReceive;
         int recBytes;
 
@@ -303,6 +378,7 @@ int plcBufferReceive (plcConn *conn, size_t nBytes) {
             nBytesToReceive -= recBytes;
             assert(buf->pEnd <= buf->bufSize);
         }
+#endif
     }
 
     return 0;
@@ -317,6 +393,34 @@ int plcBufferFlush (plcConn *conn) {
     return plcBufferMaybeFlush(conn, true);
 }
 
+#if USE_SHM
+static void *
+plc_shmset(size_t bytes, char *fn, int proj_id)
+{
+	key_t key;
+	int shmid;
+	void *p;
+
+	if ((key = ftok(fn, proj_id)) < 0) {
+		lprintf(ERROR, "ftok fails: %d\n", errno);
+		return NULL;
+	}
+
+	if ((shmid = shmget(key, sizeof(SHM), 0666|IPC_CREAT|IPC_EXCL)) < 0) {
+		if (errno == EEXIST) {
+			shmid = shmget(key, bytes, 0666);
+			p = shmat(shmid, NULL, 0);
+		} else {
+			lprintf(ERROR, "shmget fails (%lld %s %d): %d\n", bytes, fn, proj_id, errno);
+			p = NULL;
+		}
+	} else {
+		p = (SHM *)shmat(shmid, NULL, 0);
+	}
+	return p;
+}
+#endif
+
 /*
  *  Initialize plcConn data structure and input/output buffers
  */
@@ -329,11 +433,35 @@ plcConn * plcConnInit(int sock) {
     conn->buffer[PLC_OUTPUT_BUFFER] = (plcBuffer*)plc_top_alloc(sizeof(plcBuffer));
 
     // Initializing buffers
+#if USE_SHM
+
+	/* 8 is the head room for start and length. */
+#ifdef COMM_STANDALONE
+	/* container */
+    conn->buffer[PLC_INPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/opt/share/in.shm", 'i') + 8;
+#else
+    conn->buffer[PLC_INPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/home/gpadmin/share/out.shm", 'o') + 8;
+#endif
+
+#else
     conn->buffer[PLC_INPUT_BUFFER]->data = (char*)plc_top_alloc(PLC_BUFFER_SIZE);
+#endif
+
     conn->buffer[PLC_INPUT_BUFFER]->bufSize = PLC_BUFFER_SIZE;
     conn->buffer[PLC_INPUT_BUFFER]->pStart = 0;
     conn->buffer[PLC_INPUT_BUFFER]->pEnd = 0;
+#if USE_SHM
+
+#ifdef COMM_STANDALONE
+    conn->buffer[PLC_OUTPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/opt/share/out.shm", 'o') + 8;
+#else
+    conn->buffer[PLC_OUTPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/home/gpadmin/share/in.shm", 'i') + 8;
+#endif
+
+#else
     conn->buffer[PLC_OUTPUT_BUFFER]->data = (char*)plc_top_alloc(PLC_BUFFER_SIZE);
+#endif
+
     conn->buffer[PLC_OUTPUT_BUFFER]->bufSize = PLC_BUFFER_SIZE;
     conn->buffer[PLC_OUTPUT_BUFFER]->pStart = 0;
     conn->buffer[PLC_OUTPUT_BUFFER]->pEnd = 0;

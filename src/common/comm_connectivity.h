@@ -10,7 +10,8 @@
 
 #include <stddef.h>
 
-#define PLC_BUFFER_SIZE 8192
+#define PLC_BUFFER_SIZE 16384
+//#define PLC_BUFFER_SIZE 8192
 #define PLC_BUFFER_MIN_FREE 200
 #define PLC_INPUT_BUFFER 0
 #define PLC_OUTPUT_BUFFER 1
