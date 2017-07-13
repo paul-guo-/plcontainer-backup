@@ -73,7 +73,7 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
 	} while (sz < 0 && errno == EINTR);
 
 	if (sz < 0)
-        lprintf(ERROR, "%s(), errno: %d", __func__, (int) sz);
+        lprintf(ERROR, "%s(), errno: %d", __func__, errno);
 
 	read_buf_head_room(buf);
 
@@ -120,7 +120,7 @@ static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
 	} while (sz < 0 && errno == EINTR);
 
 	if (sz < 0)
-        lprintf(ERROR, "%s(), errno: %d", __func__, (int) sz);
+        lprintf(ERROR, "%s(), errno: %d", __func__, errno);
 
 	return len;
 
