@@ -23,16 +23,24 @@
 #include "comm_utils.h"
 #include "comm_connectivity.h"
 
+
 static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len);
 static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len);
 static int plcBufferMaybeFlush (plcConn *conn, bool isForse);
 static int plcBufferMaybeReset (plcConn *conn, int bufType);
 static int plcBufferMaybeResize (plcConn *conn, int bufType, size_t bufAppend);
 
+#define USE_SHM
+
+#ifdef USE_SHM
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#endif
+
 #ifdef USE_SHM
 static void write_buf_head_room(plcBuffer *buf)
 {
-	int *data_info = buf->data - 8;
+	int *data_info = (int *)((char *) buf->data - 8);
 
 	data_info[0] = buf->pStart;
 	data_info[1] = buf->pEnd;
@@ -40,7 +48,7 @@ static void write_buf_head_room(plcBuffer *buf)
 
 static void read_buf_head_room(plcBuffer *buf)
 {
-	int *data_info = buf->data - 8;
+	int *data_info = (int *)((char *)buf->data - 8);
 
 	buf->pStart = data_info[0];
 	buf->pEnd = data_info[1];
@@ -59,12 +67,13 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
     ssize_t sz;
     plcBuffer *buf = conn->buffer[PLC_INPUT_BUFFER];
 
+	((void)ptr); ((void)len);
 	do {
         sz = recv(conn->sock, &rx_oct, 1, 0);
-	} while (sz < 0 && errno = EINTR);
+	} while (sz < 0 && errno == EINTR);
 
 	if (sz < 0)
-        lprintf(ERROR, "%s(), errno: %d", __func__, sz);
+        lprintf(ERROR, "%s(), errno: %d", __func__, (int) sz);
 
 	read_buf_head_room(buf);
 
@@ -105,12 +114,13 @@ static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
 
 	write_buf_head_room(buf);
 
+	((void)ptr);
     do {
 		sz = send(conn->sock, &tx_oct, 1, 0);
 	} while (sz < 0 && errno == EINTR);
 
 	if (sz < 0)
-        lprintf(ERROR, "%s(), errno: %d", __func__, sz);
+        lprintf(ERROR, "%s(), errno: %d", __func__, (int) sz);
 
 	return len;
 
@@ -231,7 +241,7 @@ static int plcBufferMaybeResize (plcConn *conn, int bufType, size_t bufAppend) {
         newBuffer = NULL;
 #else
         newBuffer = (char*)plc_top_alloc(newSize);
-#else
+#endif
         if (newBuffer == NULL) {
             lprintf(ERROR, "plcBufferMaybeFlush: Cannot allocate %d bytes "
                            "for output buffer", newSize);
@@ -349,7 +359,8 @@ int plcBufferReceive (plcConn *conn, size_t nBytes) {
     // If we don't have enough data in the buffer already
     if (buf->pEnd - buf->pStart < (int)nBytes) {
 #ifdef USE_SHM
-		plcSocketRecv(conn, NULL, 0);
+		res = plcSocketRecv(conn, NULL, 0);
+		((void)res);
 #else
         int nBytesToReceive;
         int recBytes;
@@ -393,8 +404,8 @@ int plcBufferFlush (plcConn *conn) {
     return plcBufferMaybeFlush(conn, true);
 }
 
-#if USE_SHM
-static void *
+#ifdef USE_SHM
+static char *
 plc_shmset(size_t bytes, char *fn, int proj_id)
 {
 	key_t key;
@@ -406,16 +417,16 @@ plc_shmset(size_t bytes, char *fn, int proj_id)
 		return NULL;
 	}
 
-	if ((shmid = shmget(key, sizeof(SHM), 0666|IPC_CREAT|IPC_EXCL)) < 0) {
+	if ((shmid = shmget(key, bytes, 0666|IPC_CREAT|IPC_EXCL)) < 0) {
 		if (errno == EEXIST) {
 			shmid = shmget(key, bytes, 0666);
 			p = shmat(shmid, NULL, 0);
 		} else {
-			lprintf(ERROR, "shmget fails (%lld %s %d): %d\n", bytes, fn, proj_id, errno);
+			lprintf(ERROR, "shmget fails (%d %s %d): %d\n", (int) bytes, fn, proj_id, errno);
 			p = NULL;
 		}
 	} else {
-		p = (SHM *)shmat(shmid, NULL, 0);
+		p = shmat(shmid, NULL, 0);
 	}
 	return p;
 }
@@ -433,7 +444,7 @@ plcConn * plcConnInit(int sock) {
     conn->buffer[PLC_OUTPUT_BUFFER] = (plcBuffer*)plc_top_alloc(sizeof(plcBuffer));
 
     // Initializing buffers
-#if USE_SHM
+#ifdef USE_SHM
 
 	/* 8 is the head room for start and length. */
 #ifdef COMM_STANDALONE
@@ -450,7 +461,7 @@ plcConn * plcConnInit(int sock) {
     conn->buffer[PLC_INPUT_BUFFER]->bufSize = PLC_BUFFER_SIZE;
     conn->buffer[PLC_INPUT_BUFFER]->pStart = 0;
     conn->buffer[PLC_INPUT_BUFFER]->pEnd = 0;
-#if USE_SHM
+#ifdef USE_SHM
 
 #ifdef COMM_STANDALONE
     conn->buffer[PLC_OUTPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/opt/share/out.shm", 'o') + 8;
