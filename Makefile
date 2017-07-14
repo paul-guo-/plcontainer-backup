@@ -45,6 +45,9 @@ else
   $(info curl-config is not found, building with default Docker API interface)
 endif
 
+CENTOS_VER = $(shell awk '{print $$3}' /etc/redhat-release | awk -F'.' '{print $$1}')
+override CFLAGS += -DCENTOS_VER=$(CENTOS_VER)
+
 #libxml
 LIBXML_CONFIG = $(shell which xml2-config || echo no)
 ifneq ($(LIBXML_CONFIG),no)

@@ -23,7 +23,11 @@
 
 // Docker API version used in all the API calls
 // v1.21 is available in Docker v1.9.x+
+#if CENTOS_VER == 6
+static char *plc_docker_api_version = "v1.19";
+#else
 static char *plc_docker_api_version = "v1.21";
+#endif
 
 // Default location of the Docker API unix socket
 static char *plc_docker_socket = "/var/run/docker.sock";
