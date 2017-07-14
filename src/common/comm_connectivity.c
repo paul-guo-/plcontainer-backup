@@ -406,7 +406,7 @@ int plcBufferFlush (plcConn *conn) {
 
 #ifdef USE_SHM
 static char *
-plc_shmset(size_t bytes, char *fn, int proj_id)
+plc_shmset(size_t bytes, char *fn, int proj_id, int *id)
 {
 	key_t key;
 	int shmid;
@@ -428,6 +428,9 @@ plc_shmset(size_t bytes, char *fn, int proj_id)
 	} else {
 		p = shmat(shmid, NULL, 0);
 	}
+
+	*id = shmid;
+
 	return p;
 }
 #endif
@@ -437,6 +440,10 @@ plc_shmset(size_t bytes, char *fn, int proj_id)
  */
 plcConn * plcConnInit(int sock) {
     plcConn *conn;
+
+#ifdef USE_SHM
+	int id;
+#endif
 
     // Initializing main structures
     conn = (plcConn*)plc_top_alloc(sizeof(plcConn));
@@ -449,13 +456,15 @@ plcConn * plcConnInit(int sock) {
 	/* 8 is the head room for start and length. */
 #ifdef COMM_STANDALONE
 	/* container */
-    conn->buffer[PLC_INPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/opt/share/in.shm", 'i') + 8;
+    conn->buffer[PLC_INPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/opt/share/in.shm", 'i', &id) + 8;
 #else
-    conn->buffer[PLC_INPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/home/gpadmin/share/out.shm", 'o') + 8;
+    conn->buffer[PLC_INPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/home/gpadmin/share/out.shm", 'o', &id) + 8;
 #endif
+    conn->buffer[PLC_INPUT_BUFFER]->shmid = id;
 
 #else
     conn->buffer[PLC_INPUT_BUFFER]->data = (char*)plc_top_alloc(PLC_BUFFER_SIZE);
+
 #endif
 
     conn->buffer[PLC_INPUT_BUFFER]->bufSize = PLC_BUFFER_SIZE;
@@ -464,13 +473,15 @@ plcConn * plcConnInit(int sock) {
 #ifdef USE_SHM
 
 #ifdef COMM_STANDALONE
-    conn->buffer[PLC_OUTPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/opt/share/out.shm", 'o') + 8;
+    conn->buffer[PLC_OUTPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/opt/share/out.shm", 'o', &id) + 8;
 #else
-    conn->buffer[PLC_OUTPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/home/gpadmin/share/in.shm", 'i') + 8;
+    conn->buffer[PLC_OUTPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/home/gpadmin/share/in.shm", 'i', &id) + 8;
 #endif
+    conn->buffer[PLC_OUTPUT_BUFFER]->shmid = id;
 
 #else
     conn->buffer[PLC_OUTPUT_BUFFER]->data = (char*)plc_top_alloc(PLC_BUFFER_SIZE);
+
 #endif
 
     conn->buffer[PLC_OUTPUT_BUFFER]->bufSize = PLC_BUFFER_SIZE;
@@ -527,8 +538,15 @@ plcConn *plcConnect(int port) {
 void plcDisconnect(plcConn *conn) {
     if (conn != NULL) {
         close(conn->sock);
+#ifdef USE_SHM
+		shmdt(conn->buffer[PLC_INPUT_BUFFER]->data);
+		shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
+		shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data);
+		shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);
+#else
         pfree(conn->buffer[PLC_INPUT_BUFFER]->data);
         pfree(conn->buffer[PLC_OUTPUT_BUFFER]->data);
+#endif
         pfree(conn->buffer[PLC_INPUT_BUFFER]);
         pfree(conn->buffer[PLC_OUTPUT_BUFFER]);
         pfree(conn);
