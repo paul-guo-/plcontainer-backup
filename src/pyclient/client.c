@@ -61,6 +61,13 @@ int main(int argc UNUSED, char **argv UNUSED) {
         }
     #endif
 
+#ifdef USE_SHM
+        shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - 8);
+        shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
+        shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - 8);
+        shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);
+#endif
+
     lprintf(NOTICE, "Client has finished execution");
     return 0;
 }

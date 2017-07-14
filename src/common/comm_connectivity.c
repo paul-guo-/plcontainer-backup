@@ -30,13 +30,6 @@ static int plcBufferMaybeFlush (plcConn *conn, bool isForse);
 static int plcBufferMaybeReset (plcConn *conn, int bufType);
 static int plcBufferMaybeResize (plcConn *conn, int bufType, size_t bufAppend);
 
-#define USE_SHM
-
-#ifdef USE_SHM
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#endif
-
 #ifdef USE_SHM
 static void write_buf_head_room(plcBuffer *buf)
 {
@@ -539,9 +532,9 @@ void plcDisconnect(plcConn *conn) {
     if (conn != NULL) {
         close(conn->sock);
 #ifdef USE_SHM
-		shmdt(conn->buffer[PLC_INPUT_BUFFER]->data);
+		shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - 8);
 		shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
-		shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data);
+		shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - 8);
 		shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);
 #else
         pfree(conn->buffer[PLC_INPUT_BUFFER]->data);

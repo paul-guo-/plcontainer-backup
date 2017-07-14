@@ -16,6 +16,12 @@
 #define PLC_INPUT_BUFFER 0
 #define PLC_OUTPUT_BUFFER 1
 
+#ifndef USE_SHM
+#define USE_SHM
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#endif
+
 typedef struct plcBuffer {
     char *data;
     int   pStart;
