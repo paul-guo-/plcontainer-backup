@@ -21,6 +21,7 @@ typedef struct plcBuffer {
     int   pStart;
     int   pEnd;
     int   bufSize;
+	int   shmid;
 } plcBuffer;
 
 typedef struct plcConn {
