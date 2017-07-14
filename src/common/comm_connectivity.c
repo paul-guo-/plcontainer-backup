@@ -136,7 +136,9 @@ static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
  * Returns 0 on success, -1 on failure
  */
 static int plcBufferMaybeFlush (plcConn *conn, bool isForse) {
+#ifndef USE_SHM
     int res = 0;
+#endif
     plcBuffer *buf = conn->buffer[PLC_OUTPUT_BUFFER];
 
     /*
@@ -163,10 +165,14 @@ static int plcBufferMaybeFlush (plcConn *conn, bool isForse) {
             buf->pStart += sent;
         }
 
+#ifndef USE_SHM
+		// Do not reset since the rx side is probably consuming the data.
+
         // After the flush we should consider resetting the buffer
         res = plcBufferMaybeReset(conn, PLC_OUTPUT_BUFFER);
         if (res < 0)
             return res;
+#endif
     }
 
     return 0;
@@ -186,6 +192,9 @@ static int plcBufferMaybeReset (plcConn *conn, int bufType) {
     if (buf->pStart == buf->pEnd) {
         buf->pStart = 0;
         buf->pEnd = 0;
+#ifdef USE_SHM
+		write_buf_head_room(buf);
+#endif
     }
 
     /*
@@ -196,11 +205,11 @@ static int plcBufferMaybeReset (plcConn *conn, int bufType) {
         memcpy(buf->data, buf->data + buf->pStart, buf->pEnd - buf->pStart);
         buf->pEnd = buf->pEnd - buf->pStart;
         buf->pStart = 0;
+#ifdef USE_SHM
+		write_buf_head_room(buf);
+#endif
     }
 
-#ifdef USE_SHM
-	write_buf_head_room(buf);
-#endif
 
     return 0;
 }
