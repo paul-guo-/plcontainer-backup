@@ -320,7 +320,9 @@ int plc_docker_create_container(int sockfd UNUSED, plcContainer *cont, char **na
             "    \"HostConfig\": {\n"
             "        \"Binds\": [%s],\n"
             "        \"Memory\": %lld,\n"
+#ifdef USE_SHM
             "        \"IpcMode\": \"host\",\n"
+#endif
             "        \"PublishAllPorts\": true\n"
             "    }\n"
             "}\n";

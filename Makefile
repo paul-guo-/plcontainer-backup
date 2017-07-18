@@ -45,8 +45,12 @@ else
   $(info curl-config is not found, building with default Docker API interface)
 endif
 
+# For various docker API versions.
 CENTOS_VER = $(shell awk '{print $$3}' /etc/redhat-release | awk -F'.' '{print $$1}')
 override CFLAGS += -DCENTOS_VER=$(CENTOS_VER)
+
+# For data transmission with shared memory vs unix domain socket.
+override CFLAGS += -DUSE_SHM
 
 #libxml
 LIBXML_CONFIG = $(shell which xml2-config || echo no)

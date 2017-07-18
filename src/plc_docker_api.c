@@ -66,7 +66,9 @@ static char *plc_docker_create_request =
         "    \"HostConfig\": {\n"
         "        \"Binds\": [%s],\n"
         "        \"Memory\": %lld,\n"
+#ifdef USE_SHM
         "        \"IpcMode\": \"host\",\n"
+#endif
         "        \"PublishAllPorts\": true\n"
         "    }\n"
         "}\n";
