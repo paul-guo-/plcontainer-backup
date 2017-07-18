@@ -20,6 +20,27 @@
 #include "pycall.h"
 #include "pyerror.h"
 
+
+#ifdef USE_SHM
+/* Hack for shm remove */
+static plcConn* conn_for_cleanup;
+
+void
+on_proc_exit(void)
+{
+    plcConn* conn = conn_for_cleanup;
+
+	if (conn != NULL) {
+        shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - 8);
+        shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
+        shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - 8);
+        shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);
+	}
+
+    lprintf(NOTICE, "Client exiting. Cleanup shared memory setting.");
+}
+#endif
+
 int main(int argc UNUSED, char **argv UNUSED) {
     int      sock;
     plcConn* conn;
@@ -38,10 +59,17 @@ int main(int argc UNUSED, char **argv UNUSED) {
     // Initialize Python
     status = python_init();
 
+#ifdef USE_SHM
+	atexit(on_proc_exit);
+#endif
+
     #ifdef _DEBUG_CLIENT
         // In debug mode we have a cycle of connections with infinite wait time
         while (true) {
             conn = connection_init(sock);
+#ifdef USE_SHM
+			conn_for_cleanup = conn;
+#endif
             if (status == 0) {
                 receive_loop(handle_call, conn);
             } else {
@@ -54,19 +82,15 @@ int main(int argc UNUSED, char **argv UNUSED) {
         // and the client works for a single connection only
         connection_wait(sock);
         conn = connection_init(sock);
+#ifdef USE_SHM
+		conn_for_cleanup = conn;
+#endif
         if (status == 0) {
             receive_loop(handle_call, conn);
         } else {
             plc_raise_delayed_error();
         }
     #endif
-
-#ifdef USE_SHM
-        shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - 8);
-        shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
-        shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - 8);
-        shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);
-#endif
 
     lprintf(NOTICE, "Client has finished execution");
     return 0;
