@@ -30,6 +30,8 @@ on_proc_exit(void)
 {
     plcConn* conn = conn_for_cleanup;
 
+	fflush(stdout);
+	fflush(stderr);
 	if (conn != NULL) {
         shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - 8);
         shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
