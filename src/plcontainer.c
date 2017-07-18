@@ -41,10 +41,35 @@ static void plcontainer_process_exception(plcMsgError *msg);
 static void plcontainer_process_sql(plcMsgSQL *msg, plcConn* conn);
 static void plcontainer_process_log(plcMsgLog *log);
 
+#ifdef USE_SHM
+static bool is_plc_shm_inited = false;
+static plcConn *conn_for_cleanup;
+
+void
+plcontainer_cleanup(int code, Datum arg)
+{
+	plcConn *conn = conn_for_cleanup;
+
+	if (conn_for_cleanup) {
+		shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - 8);
+		shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
+		shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - 8);
+		shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);
+	}
+}
+#endif
+
 Datum plcontainer_call_handler(PG_FUNCTION_ARGS) {
     Datum datumreturn = (Datum) 0;
     MemoryContext oldMC = NULL;
     int ret;
+
+#ifdef USE_SHM
+	if (!is_plc_shm_inited) {
+		on_proc_exit(plcontainer_cleanup, 0);
+		is_plc_shm_inited = true;
+	}
+#endif
 
     /* TODO: handle trigger requests as well */
     if (CALLED_AS_TRIGGER(fcinfo)) {
@@ -177,6 +202,9 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
                         "and cannot be used", name);
         } else {
             conn = start_container(cont);
+#ifdef USE_SHM
+			conn_for_cleanup = conn;
+#endif
         }
     }
     pfree(name);
