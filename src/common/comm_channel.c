@@ -676,6 +676,12 @@ static int send_result(plcConn *conn, plcMsgResult *ret) {
         msg = (plcMsgError*)ret->exception_callback();
     }
 
+#ifdef USE_PROF
+	struct timespec t = gettimespec();
+	res |=  send_int64(conn, t.tv_sec);
+	res |=  send_int64(conn, t.tv_nsec);
+#endif
+
     if (msg == NULL) {
         res |= send_char(conn, 'N');
     } else {
@@ -786,6 +792,28 @@ static int receive_result(plcConn *conn, plcMessage **mRes) {
             }
         }
     }
+
+#ifdef USE_PROF
+	struct timespec t;
+	static int cnt;
+	static int64_t total;
+	long long tv_sec, tv_nsec;
+
+	res |= receive_int64(conn, &tv_sec);
+	res |= receive_int64(conn, &tv_nsec);
+
+	cnt++;
+	t = gettimespec();
+
+	/* ignore warm up time */
+	if (cnt > 10)
+		total += ((int64_t)t.tv_sec - tv_sec) * 1000 * 1000 * 1000 + ((int64_t)t.tv_nsec - tv_nsec);
+
+	if ((cnt%100000) == 0) {
+		lprintf(WARNING, "real recv consumes %.3fms for the last 10*1000 calls", total/1000.0/1000.0);
+		total = 0;
+	}
+#endif
 
     res |= receive_char(conn, &exc);
     if (exc == MT_EXCEPTION) {
@@ -901,7 +929,7 @@ static int receive_call(plcConn *conn, plcMessage **mCall) {
 		total += ((int64_t)t.tv_sec - tv_sec) * 1000 * 1000 * 1000 + ((int64_t)t.tv_nsec - tv_nsec);
 
 	if ((cnt%100000) == 0) {
-		lprintf(WARNING, "send consumes %.3fms for the last 10*1000 calls", total/1000.0/1000.0);
+		lprintf(WARNING, "real send consumes %.3fms for the last 10*1000 calls", total/1000.0/1000.0);
 		total = 0;
 	}
 #endif
