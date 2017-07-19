@@ -29,6 +29,12 @@ interpreted as representing official policies, either expressed or implied, of t
 #ifndef PLC_COMM_UTILS_H
 #define PLC_COMM_UTILS_H
 
+#ifdef USE_PROF
+#include <time.h>
+#include <stdlib.h>
+struct timespec gettime_microsec(void);
+#endif
+
 /*
   COMM_STANDALONE should be defined for standalone interpreters
   running inside containers, since they don't have access to postgres

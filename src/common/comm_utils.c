@@ -26,3 +26,19 @@
     }
 
 #endif /* COMM_STANDALONE */
+
+#ifdef USE_PROF
+
+struct timespec
+gettime_microsec(void)
+{
+    struct timespec ts;
+	int status;
+
+    status = clock_gettime(CLOCK_MONOTONIC, &ts);
+	if (status != 0)
+		lprintf(ERROR, "%s() does not work with return values: %d", __func__, status);
+
+	return ts;
+}
+#endif

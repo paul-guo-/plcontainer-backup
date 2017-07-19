@@ -50,7 +50,14 @@ CENTOS_VER = $(shell awk '{print $$3}' /etc/redhat-release | awk -F'.' '{print $
 override CFLAGS += -DCENTOS_VER=$(CENTOS_VER)
 
 # For data transmission with shared memory vs unix domain socket.
-override CFLAGS += -DUSE_SHM
+ifneq ($(USE_SHM),)
+	override CFLAGS += -DUSE_SHM
+endif
+
+# for time profiling.
+ifneq ($(USE_PROF),)
+	override CFLAGS += -DUSE_PROF
+endif
 
 #libxml
 LIBXML_CONFIG = $(shell which xml2-config || echo no)
