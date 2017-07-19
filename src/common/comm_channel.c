@@ -810,7 +810,7 @@ static int receive_result(plcConn *conn, plcMessage **mRes) {
 		total += ((int64_t)t.tv_sec - tv_sec) * 1000 * 1000 * 1000 + ((int64_t)t.tv_nsec - tv_nsec);
 
 	if ((cnt%PROF_TIMES) == 0) {
-		lprintf(WARNING, "real rx in client consumes %.3fms for the last %d calls", total/1000.0/1000.0, PROF_TIMES);
+		lprintf(WARNING, "real tx in client consumes %.3fms for the last %d calls (%s)", total/1000.0/1000.0, PROF_TIMES, __func__);
 		total = 0;
 	}
 #endif
@@ -929,7 +929,7 @@ static int receive_call(plcConn *conn, plcMessage **mCall) {
 		total += ((int64_t)t.tv_sec - tv_sec) * 1000 * 1000 * 1000 + ((int64_t)t.tv_nsec - tv_nsec);
 
 	if ((cnt%PROF_TIMES) == 0) {
-		lprintf(WARNING, "real tx in QE consumes %.3fms for the last %d calls", total/1000.0/1000.0, PROF_TIMES);
+		lprintf(WARNING, "real tx in QE consumes %.3fms for the last %d calls (%s)", total/1000.0/1000.0, PROF_TIMES, __func__);
 		total = 0;
 	}
 #endif
