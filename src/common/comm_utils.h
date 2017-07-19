@@ -32,7 +32,7 @@ interpreted as representing official policies, either expressed or implied, of t
 #ifdef USE_PROF
 #include <time.h>
 #include <stdlib.h>
-struct timespec gettime_microsec(void);
+struct timespec gettimespec(void);
 #endif
 
 /*

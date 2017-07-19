@@ -131,7 +131,7 @@ static Datum plcontainer_call_hook(PG_FUNCTION_ARGS) {
 	struct timespec st, end;
 	static int64_t total;
 
-	st = gettime_microsec();
+	st = gettimespec();
 #endif
 
     /* By default we return NULL */
@@ -191,7 +191,7 @@ static Datum plcontainer_call_hook(PG_FUNCTION_ARGS) {
     }
 
 #ifdef USE_PROF
-	end = gettime_microsec();
+	end = gettimespec();
 
 	cnt++;
 	/* ignore warm up time */
@@ -238,7 +238,7 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
 	struct timespec st, end;
 	static int64_t total;
 
-	st = gettime_microsec();
+	st = gettimespec();
 #endif
 
     if (conn != NULL) {
@@ -283,7 +283,7 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
     }
 
 #ifdef USE_PROF
-	end = gettime_microsec();
+	end = gettimespec();
 
 	cnt++;
 	/* ignore warm up time */

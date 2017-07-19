@@ -30,7 +30,7 @@
 #ifdef USE_PROF
 
 struct timespec
-gettime_microsec(void)
+gettimespec(void)
 {
     struct timespec ts;
 	int status;

@@ -636,6 +636,12 @@ static int send_call(plcConn *conn, plcMsgCallreq *call) {
     for (i = 0; i < call->nargs; i++)
         res |= send_argument(conn, &call->args[i]);
 
+#ifdef USE_PROF
+	struct timespec t = gettimespec();
+	res |=  send_int64(conn, t.tv_sec);
+	res |=  send_int64(conn, t.tv_nsec);
+#endif
+
     res |= message_end(conn);
     debug_print(WARNING, "Finished call request for function '%s'", call->proc.name);
     return res;
@@ -877,6 +883,29 @@ static int receive_call(plcConn *conn, plcMessage **mCall) {
         for (i = 0; i < req->nargs && res == 0; i++)
             res |= receive_argument(conn, &req->args[i]);
     }
+
+#ifdef USE_PROF
+	struct timespec t;
+	static int cnt;
+	static int64_t total;
+	long long tv_sec, tv_nsec;
+
+	res |= receive_int64(conn, &tv_sec);
+	res |= receive_int64(conn, &tv_nsec);
+
+	cnt++;
+	t = gettimespec();
+
+	/* ignore warm up time */
+	if (cnt > 10)
+		total += ((int64_t)t.tv_sec - tv_sec) * 1000 * 1000 * 1000 + ((int64_t)t.tv_nsec - tv_nsec);
+
+	if ((cnt%100000) == 0) {
+		lprintf(WARNING, "send consumes %.3fms for the last 10*1000 calls", total/1000.0/1000.0);
+		total = 0;
+	}
+#endif
+
     debug_print(WARNING, "Finished call request for function '%s'", req->proc.name);
     return res;
 }
