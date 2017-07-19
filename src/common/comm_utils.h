@@ -33,6 +33,8 @@ interpreted as representing official policies, either expressed or implied, of t
 #include <time.h>
 #include <stdlib.h>
 struct timespec gettimespec(void);
+
+#define PROF_TIMES 100000
 #endif
 
 /*

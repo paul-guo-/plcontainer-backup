@@ -198,8 +198,8 @@ static Datum plcontainer_call_hook(PG_FUNCTION_ARGS) {
 	if (cnt > 10)
 		total += (end.tv_sec - st.tv_sec) * 1000 * 1000 * 1000 + (end.tv_nsec - st.tv_nsec);
 
-	if ((cnt%100000) == 0) {
-		lprintf(WARNING, "%s() consumes %.3fms for the last 10*1000 calls", __func__, total/1000.0/1000.0);
+	if ((cnt%PROF_TIMES) == 0) {
+		lprintf(WARNING, "%s() consumes %.3fms for the last %d calls", __func__, total/1000.0/1000.0, PROF_TIMES);
 		total = 0;
 	}
 #endif
@@ -290,8 +290,10 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
 	if (cnt > 10)
 		total += (end.tv_sec - st.tv_sec) * 1000 * 1000 * 1000 + (end.tv_nsec - st.tv_nsec);
 
-	if ((cnt%100000) == 0) {
-		lprintf(WARNING, "real_tx in QE + handling in client + real_rx in client in %s() consumes %.3fms for the last 10*1000 calls", __func__, total/1000.0/1000.0);
+	if ((cnt%PROF_TIMES) == 0) {
+		lprintf(WARNING, "real_tx in QE + handling in client + real_rx in "
+			    "client in %s() consumes %.3fms for the last %d calls", __func__,
+				total/1000.0/1000.0, PROF_TIMES);
 		total = 0;
 	}
 #endif
