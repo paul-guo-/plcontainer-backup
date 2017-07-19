@@ -23,6 +23,10 @@
 #include "comm_utils.h"
 #include "comm_connectivity.h"
 
+#ifdef USE_SHM
+#include "comm_channel.h"
+#endif
+
 
 static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len);
 static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len);
@@ -37,6 +41,8 @@ static void write_buf_head_room(plcBuffer *buf)
 
 	data_info[0] = buf->pStart;
 	data_info[1] = buf->pEnd;
+
+	debug_print(WARNING, "%s(): buf->data: %p, (start:%d, end: %d), pid %d\n", __func__, buf->data, buf->pStart, buf->pEnd, getpid());
 }
 
 static void read_buf_head_room(plcBuffer *buf)
@@ -45,6 +51,8 @@ static void read_buf_head_room(plcBuffer *buf)
 
 	buf->pStart = data_info[0];
 	buf->pEnd = data_info[1];
+
+	debug_print(WARNING, "%s() : buf->data: %p, (start:%d, end: %d), pid %d\n", __func__, buf->data, buf->pStart, buf->pEnd, getpid());
 }
 #endif
 
@@ -60,15 +68,22 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
     ssize_t sz;
     plcBuffer *buf = conn->buffer[PLC_INPUT_BUFFER];
 
+	debug_print(WARNING, "\n%s() begins: pid %d\n", __func__, getpid());
+
+	/* avoid warning. */
 	((void)ptr); ((void)len);
+
 	do {
         sz = recv(conn->sock, &rx_oct, 1, 0);
 	} while (sz < 0 && errno == EINTR);
+
 
 	if (sz < 0)
         lprintf(ERROR, "%s(), errno: %d", __func__, errno);
 
 	read_buf_head_room(buf);
+
+	debug_print(WARNING, "%s() ends: (return: %d, errno: %d), pid %d, rx_ct: %d\n", __func__, (int) sz, errno, getpid(), (int) rx_oct);
 
 	/* ret value means nothing for us. */
 	return 1;
@@ -105,12 +120,16 @@ static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
     ssize_t sz;
     plcBuffer *buf = conn->buffer[PLC_OUTPUT_BUFFER];
 
+	debug_print(WARNING, "\n%s() begins: pid %d\n", __func__, getpid());
+
 	write_buf_head_room(buf);
 
 	((void)ptr);
     do {
 		sz = send(conn->sock, &tx_oct, 1, 0);
 	} while (sz < 0 && errno == EINTR);
+
+	debug_print(WARNING, "%s() ends: (return: %d, errno: %d), pid %d\n", __func__, (int) sz, errno, getpid());
 
 	if (sz < 0)
         lprintf(ERROR, "%s(), errno: %d", __func__, errno);
@@ -428,10 +447,13 @@ plc_shmset(size_t bytes, char *fn, int proj_id, int *id)
 			p = NULL;
 		}
 	} else {
+		debug_print(WARNING, "shm create done by pid: %d\n", getpid());
 		p = shmat(shmid, NULL, 0);
 	}
 
 	*id = shmid;
+
+	lprintf(WARNING, "Use shm id %d, pid: %d\n", *id, getpid());
 
 	return p;
 }

@@ -42,10 +42,12 @@ static void plcontainer_process_sql(plcMsgSQL *msg, plcConn* conn);
 static void plcontainer_process_log(plcMsgLog *log);
 
 #ifdef USE_SHM
+#include "storage/ipc.h"
+
 static bool is_plc_shm_inited = false;
 static plcConn *conn_for_cleanup;
 
-void
+static void
 plcontainer_cleanup(int code, Datum arg)
 {
 	plcConn *conn = conn_for_cleanup;
