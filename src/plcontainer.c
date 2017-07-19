@@ -194,11 +194,12 @@ static Datum plcontainer_call_hook(PG_FUNCTION_ARGS) {
 	end = gettime_microsec();
 
 	cnt++;
+	/* ignore warm up time */
 	if (cnt > 10)
 		total += (end.tv_sec - st.tv_sec) * 1000 * 1000 * 1000 + (end.tv_nsec - st.tv_nsec);
 
-	if ((cnt%10000) == 0) {
-		lprintf(WARNING, "%s() consumes %.3fms for the last 10000 calls", __func__, total/1000.0/1000.0);
+	if ((cnt%100000) == 0) {
+		lprintf(WARNING, "%s() consumes %.3fms for the last 10*1000 calls", __func__, total/1000.0/1000.0);
 		total = 0;
 	}
 #endif
@@ -231,6 +232,14 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
         }
     }
     pfree(name);
+
+#ifdef USE_PROF
+	static int cnt;
+	struct timespec st, end;
+	static int64_t total;
+
+	st = gettime_microsec();
+#endif
 
     if (conn != NULL) {
         plcontainer_channel_send(conn, (plcMessage*)req);
@@ -272,6 +281,21 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
                 break;
         }
     }
+
+#ifdef USE_PROF
+	end = gettime_microsec();
+
+	cnt++;
+	/* ignore warm up time */
+	if (cnt > 10)
+		total += (end.tv_sec - st.tv_sec) * 1000 * 1000 * 1000 + (end.tv_nsec - st.tv_nsec);
+
+	if ((cnt%100000) == 0) {
+		lprintf(WARNING, "send,recv,process in %s() consumes %.3fms for the last 10*1000 calls", __func__, total/1000.0/1000.0);
+		total = 0;
+	}
+#endif
+
     return result;
 }
 
