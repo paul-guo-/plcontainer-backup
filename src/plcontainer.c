@@ -291,7 +291,7 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
 		total += (end.tv_sec - st.tv_sec) * 1000 * 1000 * 1000 + (end.tv_nsec - st.tv_nsec);
 
 	if ((cnt%100000) == 0) {
-		lprintf(WARNING, "real_send + real_recv in %s() consumes %.3fms for the last 10*1000 calls", __func__, total/1000.0/1000.0);
+		lprintf(WARNING, "real_tx in QE + handling in client + real_rx in client in %s() consumes %.3fms for the last 10*1000 calls", __func__, total/1000.0/1000.0);
 		total = 0;
 	}
 #endif
