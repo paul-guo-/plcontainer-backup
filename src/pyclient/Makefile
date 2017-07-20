@@ -23,11 +23,17 @@ override CFLAGS += $(CUSTOMFLAGS) -I$(PLCONTAINER_DIR)/ -DCOMM_STANDALONE -Wall 
 
 ifneq ($(USE_SHM),)
 	override CFLAGS += -DUSE_SHM
+
+ifneq ($(USE_SEM),)
+	override CFLAGS += -DUSE_SEM
+	LIBS += -lrt
+endif
+
 endif
 
 ifneq ($(USE_PROF),)
 	override CFLAGS += -DUSE_PROF
-	LIBS = -lrt
+	LIBS += -lrt
 endif
 
 common_src = $(shell find $(PLCONTAINER_DIR)/common -name "*.c")

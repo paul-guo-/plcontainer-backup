@@ -37,7 +37,7 @@ static int plcBufferMaybeResize (plcConn *conn, int bufType, size_t bufAppend);
 #ifdef USE_SHM
 static void write_buf_head_room(plcBuffer *buf)
 {
-	int *data_info = (int *)((char *) buf->data - 8);
+	int *data_info = (int *)((char *) buf->data - 2 * sizeof(int));
 
 	data_info[0] = buf->pStart;
 	data_info[1] = buf->pEnd;
@@ -47,7 +47,7 @@ static void write_buf_head_room(plcBuffer *buf)
 
 static void read_buf_head_room(plcBuffer *buf)
 {
-	int *data_info = (int *)((char *)buf->data - 8);
+	int *data_info = (int *)((char *)buf->data - 2 * sizeof(int));
 
 	buf->pStart = data_info[0];
 	buf->pEnd = data_info[1];
@@ -57,7 +57,9 @@ static void read_buf_head_room(plcBuffer *buf)
 #endif
 
 #ifdef USE_SHM
+#ifndef USE_SEM
 static char rx_oct;
+#endif
 #endif
 
 /*
@@ -73,17 +75,25 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
 	/* avoid warning. */
 	((void)ptr); ((void)len);
 
+#ifdef USE_SEM
+	sem_t *sem = (sem_t *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
+
+	debug_print(WARNING, "  sem: %p", sem);
+	do {
+		sz = sem_wait(sem);
+	} while (sz < 0 && (errno == EAGAIN || errno == EINTR));
+#else
 	do {
         sz = recv(conn->sock, &rx_oct, 1, 0);
-	} while (sz < 0 && errno == EINTR);
-
+	} while (sz < 0 && (errno == EAGAIN || errno == EINTR));
+#endif
 
 	if (sz < 0)
         lprintf(ERROR, "%s(), errno: %d", __func__, errno);
 
 	read_buf_head_room(buf);
 
-	debug_print(WARNING, "%s() ends: (return: %d, errno: %d), pid %d, rx_ct: %d\n", __func__, (int) sz, errno, getpid(), (int) rx_oct);
+	debug_print(WARNING, "%s() ends: (return: %d, errno: %d), pid %d\n", __func__, (int) sz, errno, getpid());
 
 	/* ret value means nothing for us. */
 	return 1;
@@ -109,7 +119,9 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
 }
 
 #ifdef USE_SHM
+#ifndef USE_SEM
 static const char tx_oct = '0';
+#endif
 #endif
 
 /*
@@ -125,9 +137,20 @@ static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
 	write_buf_head_room(buf);
 
 	((void)ptr);
+
+#ifdef USE_SEM
+	sem_t *sem = (sem_t *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
+
+	debug_print(WARNING, "  sem: %p", sem);
+
+	do {
+		sz = sem_post(sem);
+	} while (sz < 0 && errno == EINTR);
+#else
     do {
 		sz = send(conn->sock, &tx_oct, 1, 0);
 	} while (sz < 0 && errno == EINTR);
+#endif
 
 	debug_print(WARNING, "%s() ends: (return: %d, errno: %d), pid %d\n", __func__, (int) sz, errno, getpid());
 
@@ -449,6 +472,12 @@ plc_shmset(size_t bytes, char *fn, int proj_id, int *id)
 	} else {
 		debug_print(WARNING, "shm create done by pid: %d\n", getpid());
 		p = shmat(shmid, NULL, 0);
+#ifdef USE_SEM
+		/* sem is at the beginning of the buffer. */
+		if (sem_init(p, 1, 0) != 0)
+			lprintf(ERROR, "shm_init() fails with errno %d", errno);
+		debug_print(WARNING, "shm_init at %p", p);
+#endif
 	}
 
 	*id = shmid;
@@ -477,12 +506,11 @@ plcConn * plcConnInit(int sock) {
     // Initializing buffers
 #ifdef USE_SHM
 
-	/* 8 is the head room for start and length. */
 #ifdef COMM_STANDALONE
 	/* container */
-    conn->buffer[PLC_INPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/opt/share/in.shm", 'i', &id) + 8;
+    conn->buffer[PLC_INPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, "/opt/share/in.shm", 'i', &id) + PLC_BUFFER_HEADROOM;
 #else
-    conn->buffer[PLC_INPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/home/gpadmin/share/out.shm", 'o', &id) + 8;
+    conn->buffer[PLC_INPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, "/home/gpadmin/share/out.shm", 'o', &id) + PLC_BUFFER_HEADROOM;
 #endif
     conn->buffer[PLC_INPUT_BUFFER]->shmid = id;
 
@@ -497,9 +525,9 @@ plcConn * plcConnInit(int sock) {
 #ifdef USE_SHM
 
 #ifdef COMM_STANDALONE
-    conn->buffer[PLC_OUTPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/opt/share/out.shm", 'o', &id) + 8;
+    conn->buffer[PLC_OUTPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, "/opt/share/out.shm", 'o', &id) + PLC_BUFFER_HEADROOM;
 #else
-    conn->buffer[PLC_OUTPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE+8, "/home/gpadmin/share/in.shm", 'i', &id) + 8;
+    conn->buffer[PLC_OUTPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, "/home/gpadmin/share/in.shm", 'i', &id) + PLC_BUFFER_HEADROOM;
 #endif
     conn->buffer[PLC_OUTPUT_BUFFER]->shmid = id;
 
@@ -563,9 +591,9 @@ void plcDisconnect(plcConn *conn) {
     if (conn != NULL) {
         close(conn->sock);
 #ifdef USE_SHM
-		shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - 8);
+		shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
 		shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
-		shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - 8);
+		shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
 		shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);
 #else
         pfree(conn->buffer[PLC_INPUT_BUFFER]->data);

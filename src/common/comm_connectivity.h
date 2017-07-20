@@ -17,8 +17,19 @@
 #define PLC_OUTPUT_BUFFER 1
 
 #ifdef USE_SHM
+
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+
+#ifdef USE_SEM
+#include <semaphore.h>
+#define PLC_BUFFER_HEADROOM (8 + sizeof(sem_t))
+#else
+#define PLC_BUFFER_HEADROOM 8
+#endif
+
 #endif
 
 typedef struct plcBuffer {

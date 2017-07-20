@@ -32,10 +32,11 @@ on_proc_exit(void)
 
 	fflush(stdout);
 	fflush(stderr);
+
 	if (conn != NULL) {
-        shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - 8);
+        shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
         shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
-        shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - 8);
+        shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
         shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);
 	}
 

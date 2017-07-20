@@ -52,6 +52,12 @@ override CFLAGS += -DCENTOS_VER=$(CENTOS_VER)
 # For data transmission with shared memory vs unix domain socket.
 ifneq ($(USE_SHM),)
 	override CFLAGS += -DUSE_SHM
+
+# Use semaphore for notification.
+ifneq ($(USE_SEM),)
+	override CFLAGS += -DUSE_SEM
+endif
+
 endif
 
 # for time profiling.
