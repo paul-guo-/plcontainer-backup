@@ -482,7 +482,7 @@ plc_shmset(size_t bytes, char *fn, int proj_id, int *id)
 
 	*id = shmid;
 
-	debug_print(WARNING, "Use shm id %d, pid: %d\n", *id, getpid());
+	debug_print(WARNING, "Use shm id %d, addr %p, pid: %d\n", *id, p, getpid());
 
 	return p;
 }
