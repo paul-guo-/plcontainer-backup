@@ -51,10 +51,16 @@ static void
 plcontainer_cleanup(int code, Datum arg)
 {
 	plcConn *conn = conn_for_cleanup;
+	sem_t *sem;
 
 	if (conn_for_cleanup) {
+		sem = (sem_t *) ((char *) conn->buffer[PLC_INPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
+		sem_destroy(sem);
 		shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - 8);
 		shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
+
+		sem = (sem_t *) ((char *) conn->buffer[PLC_OUTPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
+		sem_destroy(sem);
 		shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - 8);
 		shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);
 	}
