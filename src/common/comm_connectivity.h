@@ -42,6 +42,10 @@ typedef struct plcBuffer {
 #endif
 } plcBuffer;
 
+#ifdef USE_SHM
+void prepare_shm(void);
+#endif
+
 typedef struct plcConn {
     int sock;
     plcBuffer* buffer[2];

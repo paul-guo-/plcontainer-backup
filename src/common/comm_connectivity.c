@@ -475,8 +475,8 @@ plc_shmset(size_t bytes, char *fn, int proj_id, int *id)
 #ifdef USE_SEM
 		/* sem is at the beginning of the buffer. */
 		if (sem_init(p, 1, 0) != 0)
-			lprintf(ERROR, "shm_init() fails with errno %d", errno);
-		debug_print(WARNING, "shm_init at %p", p);
+			lprintf(ERROR, "sem_init() fails with errno %d", errno);
+		debug_print(WARNING, "sem_init at %p", p);
 #endif
 	}
 
@@ -485,6 +485,18 @@ plc_shmset(size_t bytes, char *fn, int proj_id, int *id)
 	debug_print(WARNING, "Use shm id %d, pid: %d\n", *id, getpid());
 
 	return p;
+}
+
+/* Set shared memory and semaphore in advance in QE. */
+static void *shm_in, *shm_out;
+static int shm_in_id, shm_out_id;
+
+void
+prepare_shm()
+{
+    shm_in = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, "/home/gpadmin/share/out.shm", 'o', &shm_in_id);
+
+    shm_out = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, "/home/gpadmin/share/in.shm", 'i', &shm_out_id);
 }
 #endif
 
@@ -495,7 +507,9 @@ plcConn * plcConnInit(int sock) {
     plcConn *conn;
 
 #ifdef USE_SHM
+#ifdef COMM_STANDALONE
 	int id;
+#endif
 #endif
 
     // Initializing main structures
@@ -509,10 +523,11 @@ plcConn * plcConnInit(int sock) {
 #ifdef COMM_STANDALONE
 	/* container */
     conn->buffer[PLC_INPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, "/opt/share/in.shm", 'i', &id) + PLC_BUFFER_HEADROOM;
-#else
-    conn->buffer[PLC_INPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, "/home/gpadmin/share/out.shm", 'o', &id) + PLC_BUFFER_HEADROOM;
-#endif
     conn->buffer[PLC_INPUT_BUFFER]->shmid = id;
+#else
+    conn->buffer[PLC_INPUT_BUFFER]->data = shm_in + PLC_BUFFER_HEADROOM;
+    conn->buffer[PLC_INPUT_BUFFER]->shmid = shm_in_id;
+#endif
 
 #else
     conn->buffer[PLC_INPUT_BUFFER]->data = (char*)plc_top_alloc(PLC_BUFFER_SIZE);
@@ -526,14 +541,14 @@ plcConn * plcConnInit(int sock) {
 
 #ifdef COMM_STANDALONE
     conn->buffer[PLC_OUTPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, "/opt/share/out.shm", 'o', &id) + PLC_BUFFER_HEADROOM;
-#else
-    conn->buffer[PLC_OUTPUT_BUFFER]->data = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, "/home/gpadmin/share/in.shm", 'i', &id) + PLC_BUFFER_HEADROOM;
-#endif
     conn->buffer[PLC_OUTPUT_BUFFER]->shmid = id;
+#else
+    conn->buffer[PLC_OUTPUT_BUFFER]->data = shm_out + PLC_BUFFER_HEADROOM;
+    conn->buffer[PLC_OUTPUT_BUFFER]->shmid = shm_out_id;
+#endif
 
 #else
     conn->buffer[PLC_OUTPUT_BUFFER]->data = (char*)plc_top_alloc(PLC_BUFFER_SIZE);
-
 #endif
 
     conn->buffer[PLC_OUTPUT_BUFFER]->bufSize = PLC_BUFFER_SIZE;

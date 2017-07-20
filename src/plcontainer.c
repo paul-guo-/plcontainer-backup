@@ -225,6 +225,9 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
             elog(ERROR, "Container '%s' is not defined in configuration "
                         "and cannot be used", name);
         } else {
+#ifdef USE_SHM
+			prepare_shm();
+#endif
             conn = start_container(cont);
 #ifdef USE_SHM
 			conn_for_cleanup = conn;
