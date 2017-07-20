@@ -26,7 +26,7 @@ ifneq ($(USE_SHM),)
 
 ifneq ($(USE_SEM),)
 	override CFLAGS += -DUSE_SEM
-	LIBS += -lrt
+	LIBS += -lpthread
 endif
 
 endif

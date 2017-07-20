@@ -46,7 +46,7 @@ else
 endif
 
 # For various docker API versions.
-CENTOS_VER = $(shell awk '{print $$3}' /etc/redhat-release | awk -F'.' '{print $$1}')
+CENTOS_VER = $(shell cat /etc/redhat-release | sed 's/.*release\ //' | awk -F'.' '{print $$1}')
 override CFLAGS += -DCENTOS_VER=$(CENTOS_VER)
 
 # For data transmission with shared memory vs unix domain socket.
