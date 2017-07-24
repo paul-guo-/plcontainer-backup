@@ -26,11 +26,17 @@
 #ifdef USE_SEM
 #include <semaphore.h>
 #define PLC_BUFFER_HEADROOM (8 + sizeof(sem_t))
-#else
-#define PLC_BUFFER_HEADROOM 8
-#endif
 
-#endif
+/* todo: USE_SEM and USE_SPIN are mutually exclusive. */
+
+#elif defined(USE_SPIN)
+#define PLC_BUFFER_HEADROOM (8 + sizeof(int))
+
+#else /* USE_SEM */
+#define PLC_BUFFER_HEADROOM 8
+#endif /* USE_SEM */
+
+#endif /* USE_SHM */
 
 typedef struct plcBuffer {
     char *data;

@@ -58,6 +58,11 @@ ifneq ($(USE_SEM),)
 	override CFLAGS += -DUSE_SEM
 endif
 
+# Use spinlock for notification.
+ifneq ($(USE_SPIN),)
+	override CFLAGS += -DUSE_SPIN
+endif
+
 endif
 
 # for time profiling.

@@ -57,7 +57,7 @@ static void read_buf_head_room(plcBuffer *buf)
 #endif
 
 #ifdef USE_SHM
-#ifndef USE_SEM
+#if !defined(USE_SEM) && !defined(USE_SPIN)
 static char rx_oct;
 #endif
 #endif
@@ -82,6 +82,13 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
 	do {
 		sz = sem_wait(sem);
 	} while (sz < 0 && (errno == EAGAIN || errno == EINTR));
+#elif defined(USE_SPIN)
+	int *p = (int *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
+
+	debug_print(WARNING, "  spin receiving: %p", p);
+	while (*p == 0); *p = 0;
+	sz = 0;
+
 #else
 	do {
         sz = recv(conn->sock, &rx_oct, 1, 0);
@@ -146,6 +153,12 @@ static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
 	do {
 		sz = sem_post(sem);
 	} while (sz < 0 && errno == EINTR);
+#elif defined(USE_SPIN)
+	int *p = (int *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
+
+	debug_print(WARNING, "  sending: %p", p);
+	*p = 1;
+	sz = 0;
 #else
     do {
 		sz = send(conn->sock, &tx_oct, 1, 0);
@@ -477,6 +490,9 @@ plc_shmset(size_t bytes, char *fn, int proj_id, int *id)
 		if (sem_init(p, 1, 0) != 0)
 			lprintf(ERROR, "sem_init() fails with errno %d", errno);
 		debug_print(WARNING, "sem_init at %p", p);
+#endif
+#ifdef USE_SPIN
+		*((int *)p) = 0;
 #endif
 	}
 

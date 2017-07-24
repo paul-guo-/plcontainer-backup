@@ -29,6 +29,10 @@ ifneq ($(USE_SEM),)
 	LIBS += -lpthread
 endif
 
+ifneq ($(USE_SPIN),)
+	override CFLAGS += -DUSE_SPIN
+endif
+
 endif
 
 ifneq ($(USE_PROF),)
