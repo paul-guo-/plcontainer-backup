@@ -307,7 +307,7 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
 
 	if ((cnt%PROF_TIMES) == 0) {
 		lprintf(WARNING, "real_tx in QE + handling in client + real_rx in "
-			    "client in %s() consumes %.3fms for the last %d calls", __func__,
+			    "QE in %s() consumes %.3fms for the last %d calls", __func__,
 				total/1000.0/1000.0, PROF_TIMES);
 		total = 0;
 	}
