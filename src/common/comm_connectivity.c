@@ -83,7 +83,7 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
 		sz = sem_wait(sem);
 	} while (sz < 0 && (errno == EAGAIN || errno == EINTR));
 #elif defined(USE_SPIN)
-	int *p = (int *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
+	volatile int *p = (int *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
 
 	debug_print(WARNING, "  spin receiving: %p", p);
 	while (*p == 0); *p = 0;
