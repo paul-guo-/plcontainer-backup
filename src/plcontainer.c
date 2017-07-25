@@ -189,6 +189,13 @@ static Datum plcontainer_call_hook(PG_FUNCTION_ARGS) {
         SRF_RETURN_DONE(funcctx);
     }
 
+#ifdef USE_PROF
+	struct timespec st2;
+	static int64_t total2;
+
+	st2 = gettimespec();
+#endif
+
     /* Process the result message from client */
     result = plcontainer_process_result(fcinfo, pinfo, presult);
 
@@ -207,10 +214,15 @@ static Datum plcontainer_call_hook(PG_FUNCTION_ARGS) {
 
 	cnt++;
 	/* ignore warm up time */
-	if (cnt > 10)
+	if (cnt > 10) {
 		total += (end.tv_sec - st.tv_sec) * 1000 * 1000 * 1000 + (end.tv_nsec - st.tv_nsec);
+		total2 += (end.tv_sec - st2.tv_sec) * 1000 * 1000 * 1000 + (end.tv_nsec - st2.tv_nsec);
+	}
 
 	if ((cnt%PROF_TIMES) == 0) {
+		lprintf(WARNING, "plcontainer_process_result()+cleanup consumes %.3fms"
+			" for the last %d calls", total2/1000.0/1000.0, PROF_TIMES);
+		total2 = 0;
 		lprintf(WARNING, "%s() consumes %.3fms for the last %d calls", __func__, total/1000.0/1000.0, PROF_TIMES);
 		total = 0;
 	}
@@ -306,8 +318,8 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
 		total += (end.tv_sec - st.tv_sec) * 1000 * 1000 * 1000 + (end.tv_nsec - st.tv_nsec);
 
 	if ((cnt%PROF_TIMES) == 0) {
-		lprintf(WARNING, "real_tx in QE + handling in client + real_rx in "
-			    "QE in %s() consumes %.3fms for the last %d calls", __func__,
+		lprintf(WARNING, "%s(): (real_tx in QE + handling in client + real_tx in "
+			    "client, i.e. a round of call) consumes %.3fms for the last %d calls", __func__,
 				total/1000.0/1000.0, PROF_TIMES);
 		total = 0;
 	}
