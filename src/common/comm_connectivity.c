@@ -37,7 +37,7 @@ static int plcBufferMaybeResize (plcConn *conn, int bufType, size_t bufAppend);
 #ifdef USE_SHM
 static void write_buf_head_room(plcBuffer *buf)
 {
-	int *data_info = (int *)((char *) buf->data - 2 * sizeof(int));
+	volatile int *data_info = (int *)((char *) buf->data - 2 * sizeof(int));
 
 	data_info[0] = buf->pStart;
 	data_info[1] = buf->pEnd;
@@ -47,7 +47,7 @@ static void write_buf_head_room(plcBuffer *buf)
 
 static void read_buf_head_room(plcBuffer *buf)
 {
-	int *data_info = (int *)((char *)buf->data - 2 * sizeof(int));
+	volatile int *data_info = (int *)((char *)buf->data - 2 * sizeof(int));
 
 	buf->pStart = data_info[0];
 	buf->pEnd = data_info[1];
@@ -85,8 +85,32 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
 #elif defined(USE_SPIN)
 	volatile int *p = (int *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
 
+	/*
+	 * FIXME:
+	 * 1) Need to double-check code that uses shared memory to avoid potential
+	 *    issues caused by compiler optimization. (e.g. Do we need to make some
+	 *    pointers to some shared memory be global, instead of on stack?)
+	 * 2) Add back-off (allow context switch) for real spinlock
+	 *    to avoid 100% cpu utilization. (yield? sleep? sem_wait?)
+	 * 3) Use instructions with less energy-consuming during spin.
+	 * 4) We should use atomic_read() kinda wrapper, i.e.
+	 *    not access via *p. Here for simplicity I used *p directly since
+	 *    on modern x86 accessing using *p on aligned address is atomic.
+	 */
+
 	debug_print(WARNING, "  spin receiving: %p", p);
-	while (*p == 0); *p = 0;
+#if 0
+	int cnt = 0;
+#endif
+	while (*p == 0) {
+#if 0
+		__asm__ ("pause");
+		cnt++;
+		if ((cnt&2047) == 0)
+			usleep(1);
+#endif
+	}
+	*p = 0;
 	sz = 0;
 
 #else
@@ -154,7 +178,7 @@ static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
 		sz = sem_post(sem);
 	} while (sz < 0 && errno == EINTR);
 #elif defined(USE_SPIN)
-	int *p = (int *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
+	volatile int *p = (int *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
 
 	debug_print(WARNING, "  sending: %p", p);
 	*p = 1;
@@ -504,7 +528,7 @@ plc_shmset(size_t bytes, char *fn, int proj_id, int *id)
 }
 
 /* Set shared memory and semaphore in advance in QE. */
-static void *shm_in, *shm_out;
+static char *shm_in, *shm_out;
 static int shm_in_id, shm_out_id;
 
 void
