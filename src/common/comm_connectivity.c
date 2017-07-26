@@ -180,6 +180,7 @@ static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
 #elif defined(USE_SPIN)
 	volatile int *p = (int *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
 
+	/* FIXME: Use random value for each session for better security? */
 	debug_print(WARNING, "  sending: %p", p);
 	*p = 1;
 	sz = 0;
