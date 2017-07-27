@@ -96,6 +96,8 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
 	 * 4) We should use atomic_read() kinda wrapper, i.e.
 	 *    not access via *p. Here for simplicity I used *p directly since
 	 *    on modern x86 accessing using *p on aligned address is atomic.
+	 * 5) If we finally use this lock-free solution, we should be careful
+	 *    about the need of barrier.
 	 */
 
 	debug_print(WARNING, "  spin receiving: %p", p);
