@@ -98,6 +98,7 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
 	 *    on modern x86 accessing using *p on aligned address is atomic.
 	 * 5) If we finally use this lock-free solution, we should be careful
 	 *    about the need of barrier.
+	 * 6) Better use wrapper functions in pg for IPC (at least for the QE side)
 	 */
 
 	debug_print(WARNING, "  spin receiving: %p", p);
