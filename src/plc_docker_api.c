@@ -21,13 +21,15 @@
 
 /* Templates for Docker API communication */
 
-// Docker API version used in all the API calls
-// v1.21 is available in Docker v1.9.x+
-// URL prefix specifies Docker API version
+/*
+ * Docker API version used in all the API calls
+ * v1.21 is available in Docker v1.9.x+
+ * URL prefix specifies Docker API version
+ */
 #ifdef DOCKER_API_LOW
-    static char *plc_docker_api_version = "v1.19";
+static char *plc_docker_api_version = "v1.19";
 #else
-    static char *plc_docker_api_version = "v1.21";
+static char *plc_docker_api_version = "v1.21";
 #endif
 
 // Default location of the Docker API unix socket
@@ -67,6 +69,7 @@ static char *plc_docker_create_request =
         "    \"HostConfig\": {\n"
         "        \"Binds\": [%s],\n"
         "        \"Memory\": %lld,\n"
+        "        \"IpcMode\": \"host\",\n"
         "        \"PublishAllPorts\": true\n"
         "    }\n"
         "}\n";

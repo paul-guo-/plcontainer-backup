@@ -10,17 +10,33 @@
 
 #include <stddef.h>
 
-#define PLC_BUFFER_SIZE 8192
+#define PLC_BUFFER_SIZE 16384
+/* #define PLC_BUFFER_SIZE 8192 */
 #define PLC_BUFFER_MIN_FREE 200
 #define PLC_INPUT_BUFFER 0
 #define PLC_OUTPUT_BUFFER 1
+
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <semaphore.h>
+
+#include "comm_utils.h"
+
+extern bool isNetworkConnection;
+
+#define PLC_BUFFER_HEADROOM (8 + sizeof(sem_t))
 
 typedef struct plcBuffer {
     char *data;
     int   pStart;
     int   pEnd;
     int   bufSize;
+	int   shmid;
 } plcBuffer;
+
+void plcPrepareIPC(void);
 
 typedef struct plcConn {
     int sock;

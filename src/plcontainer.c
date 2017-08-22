@@ -24,6 +24,7 @@
 #include "plc_typeio.h"
 #include "plc_configuration.h"
 #include "plcontainer.h"
+#include "storage/ipc.h"
 
 #ifdef PG_MODULE_MAGIC
 PG_MODULE_MAGIC;
@@ -41,10 +42,37 @@ static void plcontainer_process_exception(plcMsgError *msg);
 static void plcontainer_process_sql(plcMsgSQL *msg, plcConn* conn);
 static void plcontainer_process_log(plcMsgLog *log);
 
+static bool is_plc_shm_inited = false;
+static plcConn *conn_for_cleanup;
+
+static void
+plcontainer_cleanup(pg_attribute_unused() int code, pg_attribute_unused() Datum arg)
+{
+	plcConn *conn = conn_for_cleanup;
+	sem_t *sem;
+
+	if (conn_for_cleanup) {
+		sem = (sem_t *) ((char *) conn->buffer[PLC_INPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
+		sem_destroy(sem);
+		shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - 8);
+		shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
+
+		sem = (sem_t *) ((char *) conn->buffer[PLC_OUTPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
+		sem_destroy(sem);
+		shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - 8);
+		shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);
+	}
+}
+
 Datum plcontainer_call_handler(PG_FUNCTION_ARGS) {
     Datum datumreturn = (Datum) 0;
     MemoryContext oldMC = NULL;
     int ret;
+
+	if (!is_plc_shm_inited) {
+		on_proc_exit(plcontainer_cleanup, 0);
+		is_plc_shm_inited = true;
+	}
 
     /* TODO: handle trigger requests as well */
     if (CALLED_AS_TRIGGER(fcinfo)) {
@@ -176,7 +204,9 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
             elog(ERROR, "Container '%s' is not defined in configuration "
                         "and cannot be used", name);
         } else {
+			plcPrepareIPC();
             conn = start_container(cont);
+			conn_for_cleanup = conn;
         }
     }
     pfree(name);
@@ -221,6 +251,23 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
                 break;
         }
     }
+
+#ifdef USE_PROF
+	end = gettimespec();
+
+	cnt++;
+	/* ignore warm up time */
+	if (cnt > 10)
+		total += (end.tv_sec - st.tv_sec) * 1000 * 1000 * 1000 + (end.tv_nsec - st.tv_nsec);
+
+	if ((cnt%PROF_TIMES) == 0) {
+		lprintf(WARNING, "%s(): (real_tx in QE + handling in client + real_tx in "
+			    "client, i.e. a round of call) consumes %.3fms for the last %d calls", __func__,
+				total/1000.0/1000.0, PROF_TIMES);
+		total = 0;
+	}
+#endif
+
     return result;
 }
 

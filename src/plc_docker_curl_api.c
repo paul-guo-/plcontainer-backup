@@ -20,15 +20,16 @@
 #include <string.h>
 #include <curl/curl.h>
 
-// Default location of the Docker API unix socket
+/* Default location of the Docker API unix socket */
 static char *plc_docker_socket = "/var/run/docker.sock";
 
-// URL prefix specifies Docker API version
+/* URL prefix specifies Docker API version */
 #ifdef DOCKER_API_LOW
-    static char *plc_docker_url_prefix = "http:/v1.19";
+static char *plc_docker_url_prefix = "http:/v1.19";
 #else
-    static char *plc_docker_url_prefix = "http:/v1.21";
+static char *plc_docker_url_prefix = "http:/v1.21";
 #endif
+
 /* Static functions of the Docker API module */
 static plcCurlBuffer *plcCurlBufferInit();
 static void plcCurlBufferFree(plcCurlBuffer *buf);
@@ -319,6 +320,7 @@ int plc_docker_create_container(pg_attribute_unused() int sockfd, plcContainer *
             "    \"HostConfig\": {\n"
             "        \"Binds\": [%s],\n"
             "        \"Memory\": %lld,\n"
+            "        \"IpcMode\": \"host\",\n"
             "        \"PublishAllPorts\": true\n"
             "    }\n"
             "}\n";

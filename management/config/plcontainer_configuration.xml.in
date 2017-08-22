@@ -22,6 +22,7 @@
         <container_id>pivotaldata/plcontainer_python:IMAGE_TAG</container_id>
         <command>./client</command>
         <memory_mb>128</memory_mb>
+        <shared_directory host="/home/gpadmin/share" container="/opt/share" access="rw"/>
     </container>
 
     <container>

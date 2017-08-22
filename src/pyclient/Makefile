@@ -21,6 +21,8 @@ PYTHON_LDFLAGS = $(shell $(PYTHON) -c "from distutils import sysconfig; import s
 
 override CFLAGS += $(CUSTOMFLAGS) -I$(PLCONTAINER_DIR)/ -DCOMM_STANDALONE -Wall -Wextra -Werror
 
+override LIBS += -lpthread
+
 common_src = $(shell find $(PLCONTAINER_DIR)/common -name "*.c")
 common_objs = $(foreach src,$(common_src),$(subst .c,.o,$(src)))
 python_src = $(shell find . -name "*.c")

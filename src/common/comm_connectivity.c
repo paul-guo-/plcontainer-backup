@@ -18,8 +18,15 @@
 #include <string.h>
 #include <assert.h>
 
-#include "comm_utils.h"
 #include "comm_connectivity.h"
+#include "comm_channel.h"
+
+bool isNetworkConnection = false;
+#ifdef COMM_STANDALONE
+char *plClientSharedDir;
+#else
+char *plGpSharedDir;
+#endif
 
 static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len);
 static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len);
@@ -27,41 +34,121 @@ static int plcBufferMaybeFlush (plcConn *conn, bool isForse);
 static int plcBufferMaybeReset (plcConn *conn, int bufType);
 static int plcBufferMaybeResize (plcConn *conn, int bufType, size_t bufAppend);
 
+static void plcWriteBufHeadroom(plcBuffer *buf)
+{
+	volatile int *data_info = (int *)((char *) buf->data - 2 * sizeof(int));
+
+	data_info[0] = buf->pStart;
+	data_info[1] = buf->pEnd;
+
+	debug_print(WARNING, "%s(): buf->data: %p, (start:%d, end: %d), pid %d\n", __func__, buf->data, buf->pStart, buf->pEnd, getpid());
+}
+
+static void plcReadBufHeadroom(plcBuffer *buf)
+{
+	volatile int *data_info = (int *)((char *)buf->data - 2 * sizeof(int));
+
+	buf->pStart = data_info[0];
+	buf->pEnd = data_info[1];
+
+	debug_print(WARNING, "%s() : buf->data: %p, (start:%d, end: %d), pid %d\n", __func__, buf->data, buf->pStart, buf->pEnd, getpid());
+}
+
 /*
  *  Read data from the socket
  */
 static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
-    ssize_t sz = 0;
+	ssize_t sz = 0;
 
-    while (sz <= 0) {
-        sz = recv(conn->sock, ptr, len, 0);
+	/*
+	 * FIXME:
+	 * 1) Need to double-check code that uses shared memory to avoid potential
+	 *    issues caused by compiler optimization. (e.g. Do we need to make some
+	 *    pointers to some shared memory be global, instead of on stack?)
+	 * 2) Add back-off (allow context switch) for real spinlock
+	 *    to avoid 100% cpu utilization. (yield? sleep? sem_wait?)
+	 * 3) Use instructions with less energy-consuming during spin.
+	 * 4) We should use atomic_read() kinda wrapper, i.e.
+	 *    not access via *p. Here for simplicity I used *p directly since
+	 *    on modern x86 accessing using *p on aligned address is atomic.
+	 * 5) If we finally use this lock-free solution, we should be careful
+	 *    about the need of barrier.
+	 * 6) Better use wrapper functions in pg for IPC (at least for the QE side)
+	 */
+	if (!isNetworkConnection) {
+	    plcBuffer *buf = conn->buffer[PLC_INPUT_BUFFER];
+		sem_t *sem = (sem_t *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
 
-        /* If receive command is terminated by SIGINT */
-        if (sz < 0 && errno == EINTR) {
-            lprintf(ERROR, "Query and PL/Container connections are terminated by user request");
-        }
+		debug_print(WARNING, "\n%s() begins: pid %d\n", __func__, getpid());
 
-        /* If the command is terminated by another reason - standard handler */
-        if ( !(sz == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) ) {
-            break;
-        }
-    }
+		debug_print(WARNING, "  sem: %p", sem);
+		do {
+			//sz = sem_wait(sem);
+			sz = sem_trywait(sem);
+		} while (sz < 0 && (errno == EAGAIN || errno == EINTR));
 
-    return sz;
+		if (sz < 0)
+			lprintf(ERROR, "%s(), errno: %d", __func__, errno);
+
+		plcReadBufHeadroom(buf);
+
+		debug_print(WARNING, "%s() ends: (return: %d, errno: %d), pid %d\n", __func__, (int) sz, errno, getpid());
+
+		/* ret value means nothing for us. */
+		return 1;
+	} else {
+		/*
+		 * FIXME: Let signal handler set global variable for termination/cancellation.
+		 * Add Code check here. e.g.
+		 * lprintf(ERROR, "Query and PL/Container connections are terminated by user request");
+		 */
+		do {
+			sz = recv(conn->sock, ptr, len, 0);
+		} while (sz < 0 && (errno == EAGAIN || errno == EINTR));
+
+		return sz;
+	}
 }
 
 /*
  *  Write data to the socket
  */
 static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
-    ssize_t sz = send(conn->sock, ptr, len, 0);
+    ssize_t sz;
 
-    /* If receive command is terminated by SIGINT */
-    if (sz < 0 && errno == EINTR) {
-        lprintf(ERROR, "Query and PL/Container connections are terminated by user request");
-    }
+	if (!isNetworkConnection) {
+		plcBuffer *buf = conn->buffer[PLC_OUTPUT_BUFFER];
 
-    return sz;
+		debug_print(WARNING, "\n%s() begins: pid %d\n", __func__, getpid());
+
+		plcWriteBufHeadroom(buf);
+
+		sem_t *sem = (sem_t *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
+
+		debug_print(WARNING, "  sem: %p", sem);
+
+		do {
+			sz = sem_post(sem);
+		} while (sz < 0 && errno == EINTR);
+
+		debug_print(WARNING, "%s() ends: (return: %d, errno: %d), pid %d\n", __func__, (int) sz, errno, getpid());
+
+		if (sz < 0)
+			lprintf(ERROR, "%s(), errno: %d", __func__, errno);
+
+		return len;
+	} else {
+		/*
+		 * FIXME: Let signal handler set global variable for termination/cancellation.
+		 * Add Code check here. e.g.
+		 * lprintf(ERROR, "Query and PL/Container connections are terminated by user request");
+		 */
+		do {
+			sz = send(conn->sock, ptr, len, 0);
+		} while (sz < 0 && (errno == EAGAIN || errno == EINTR));
+
+		return sz;
+	}
 }
 
 /*
@@ -98,10 +185,15 @@ static int plcBufferMaybeFlush (plcConn *conn, bool isForse) {
             buf->pStart += sent;
         }
 
-        // After the flush we should consider resetting the buffer
-        res = plcBufferMaybeReset(conn, PLC_OUTPUT_BUFFER);
-        if (res < 0)
-            return res;
+		/*
+		 * Do not reset for the non-network connection since the rx side is
+		 * probably consuming the data
+		 */
+		if (isNetworkConnection) {
+			res = plcBufferMaybeReset(conn, PLC_OUTPUT_BUFFER);
+			if (res < 0)
+				return res;
+		}
     }
 
     return 0;
@@ -121,6 +213,8 @@ static int plcBufferMaybeReset (plcConn *conn, int bufType) {
     if (buf->pStart == buf->pEnd) {
         buf->pStart = 0;
         buf->pEnd = 0;
+		if (isNetworkConnection)
+			plcWriteBufHeadroom(buf);
     }
 
     /*
@@ -131,7 +225,10 @@ static int plcBufferMaybeReset (plcConn *conn, int bufType) {
         memcpy(buf->data, buf->data + buf->pStart, buf->pEnd - buf->pStart);
         buf->pEnd = buf->pEnd - buf->pStart;
         buf->pStart = 0;
+		if (isNetworkConnection)
+			plcWriteBufHeadroom(buf);
     }
+
 
     return 0;
 }
@@ -161,13 +258,15 @@ static int plcBufferMaybeResize (plcConn *conn, int bufType, size_t bufAppend) {
         // Buffer size is twice as large as the data we need to hold, rounded
         // to the nearest PLC_BUFFER_SIZE bytes
         newSize = ((dataSize * 2) / PLC_BUFFER_SIZE + 1) * PLC_BUFFER_SIZE;
-        newBuffer = (char*)plc_top_alloc(newSize);
-        if (newBuffer == NULL) {
-            lprintf(ERROR, "plcBufferMaybeFlush: Cannot allocate %d bytes "
-                           "for output buffer", newSize);
-            return -1;
-        }
-        isReallocated = 1;
+		if (isNetworkConnection) {
+			newBuffer = (char*)plc_top_alloc(newSize);
+			if (newBuffer == NULL) {
+				lprintf(ERROR, "plcBufferMaybeFlush: Cannot allocate %d bytes "
+							   "for output buffer", newSize);
+				return -1;
+			}
+			isReallocated = 1;
+		}
     }
 
     // If we don't have enough space in buffer to handle the amount of data we
@@ -175,13 +274,15 @@ static int plcBufferMaybeResize (plcConn *conn, int bufType, size_t bufAppend) {
     else if (buf->pEnd + (int)bufAppend > buf->bufSize - PLC_BUFFER_MIN_FREE) {
         // Growing the buffer we need to just hold all the data we receive
         newSize = (dataSize / PLC_BUFFER_SIZE + 1) * PLC_BUFFER_SIZE;
-        newBuffer = (char*)plc_top_alloc(newSize);
-        if (newBuffer == NULL) {
-            lprintf(ERROR, "plcBufferMaybeGrow: Cannot allocate %d bytes for buffer",
-                           newSize);
-            return -1;
-        }
-        isReallocated = 1;
+		if (isNetworkConnection) {
+			newBuffer = (char*)plc_top_alloc(newSize);
+			if (newBuffer == NULL) {
+				lprintf(ERROR, "plcBufferMaybeGrow: Cannot allocate %d bytes for buffer",
+							   newSize);
+				return -1;
+			}
+			isReallocated = 1;
+		}
     }
 
     // If we have reallocated the buffer - copy the data over and free the old one
@@ -274,33 +375,37 @@ int plcBufferReceive (plcConn *conn, size_t nBytes) {
 
     // If we don't have enough data in the buffer already
     if (buf->pEnd - buf->pStart < (int)nBytes) {
-        int nBytesToReceive;
-        int recBytes;
+		if (!isNetworkConnection) {
+			res = plcSocketRecv(conn, NULL, 0);
+		} else {
+			int nBytesToReceive;
+			int recBytes;
 
-        // First thing to consider - resetting the data in buffer to the beginning
-        // freeing up the space in the end to receive the data
-        res = plcBufferMaybeReset(conn, PLC_INPUT_BUFFER);
-        if (res < 0)
-            return res;
+			// First thing to consider - resetting the data in buffer to the beginning
+			// freeing up the space in the end to receive the data
+			res = plcBufferMaybeReset(conn, PLC_INPUT_BUFFER);
+			if (res < 0)
+				return res;
 
-        // Second step - check whether we really need to resize the buffer after this
-        res = plcBufferMaybeResize(conn, PLC_INPUT_BUFFER, nBytes);
-        if (res < 0)
-            return res;
+			// Second step - check whether we really need to resize the buffer after this
+			res = plcBufferMaybeResize(conn, PLC_INPUT_BUFFER, nBytes);
+			if (res < 0)
+				return res;
 
-        // When we sure we have enough space - receive the related data
-        nBytesToReceive = (int)nBytes - (buf->pEnd - buf->pStart);
-        while (nBytesToReceive > 0) {
-            recBytes = plcSocketRecv(conn,
-                                     buf->data + buf->pEnd,
-                                     buf->bufSize - buf->pEnd);
-            if (recBytes <= 0) {
-                return -1;
-            }
-            buf->pEnd += recBytes;
-            nBytesToReceive -= recBytes;
-            assert(buf->pEnd <= buf->bufSize);
-        }
+			// When we sure we have enough space - receive the related data
+			nBytesToReceive = (int)nBytes - (buf->pEnd - buf->pStart);
+			while (nBytesToReceive > 0) {
+				recBytes = plcSocketRecv(conn,
+										 buf->data + buf->pEnd,
+										 buf->bufSize - buf->pEnd);
+				if (recBytes <= 0) {
+					return -1;
+				}
+				buf->pEnd += recBytes;
+				nBytesToReceive -= recBytes;
+				assert(buf->pEnd <= buf->bufSize);
+			}
+		}
     }
 
     return 0;
@@ -315,23 +420,132 @@ int plcBufferFlush (plcConn *conn) {
     return plcBufferMaybeFlush(conn, true);
 }
 
+/* FIXME:
+ * 1. For gpdb side, use PGSharedMemoryCreate() in the future?
+ * And then need to deliver the key to the clients.
+ * 2. Strictly: create in QE and thus could force to cleanup
+ * if using file to generate the key to avoid
+ * potential leak if failing to clean up in previous process.
+ */
+static char *
+plc_shmset(size_t bytes, char *fn, int proj_id, int *id)
+{
+	key_t key;
+	int shmid;
+	void *p;
+
+	if ((key = ftok(fn, proj_id)) < 0) {
+		lprintf(ERROR, "ftok fails (errno: %d) with filename %s and "
+				"projd_id %d\n", errno, fn, proj_id);
+		return NULL;
+	}
+
+	if ((shmid = shmget(key, bytes, 0600|IPC_CREAT|IPC_EXCL)) < 0) {
+		if (errno == EEXIST) {
+			shmid = shmget(key, bytes, 0600);
+			p = shmat(shmid, NULL, 0);
+		} else {
+			lprintf(ERROR, "shmget fails (errno: %d) with filename %s, "
+					"projd_id %d, size: %ld\n", errno, fn, proj_id,
+					(unsigned long) bytes);
+			p = NULL;
+		}
+	} else {
+		debug_print(WARNING, "shm create done by pid: %d\n", getpid());
+		p = shmat(shmid, NULL, 0);
+		/* sem is at the beginning of the buffer. */
+		if (sem_init(p, 1, 0) != 0)
+			lprintf(ERROR, "sem_init() fails with errno %d", errno);
+	}
+
+	*id = shmid;
+
+	debug_print(WARNING, "Use shm id %d, addr %p, pid: %d\n", *id, p, getpid());
+
+	return p;
+}
+
+#ifndef COMM_STANDALONE
+static char *shm_in, *shm_out;
+static int shm_in_id, shm_out_id;
+
+void
+plcPrepareIPC()
+{
+	char *fn = NULL;
+	int sz = strlen(plGpSharedDir) + 16;
+
+	fn = pmalloc(sz);
+
+	snprintf(fn, sz, "%s/out.shm", plGpSharedDir);
+    shm_in = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, fn, 'o', &shm_in_id);
+
+	snprintf(fn, sz, "%s/in.shm", plGpSharedDir);
+    shm_out = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, fn, 'i', &shm_out_id);
+
+	pfree(fn);
+}
+#endif
+
 /*
  *  Initialize plcConn data structure and input/output buffers
  */
 plcConn * plcConnInit(int sock) {
     plcConn *conn;
+#ifdef COMM_STANDALONE
+	size_t sz;
+	char *fn = NULL;
+	int id;
+#endif
 
     // Initializing main structures
     conn = (plcConn*)plc_top_alloc(sizeof(plcConn));
     conn->buffer[PLC_INPUT_BUFFER]  = (plcBuffer*)plc_top_alloc(sizeof(plcBuffer));
     conn->buffer[PLC_OUTPUT_BUFFER] = (plcBuffer*)plc_top_alloc(sizeof(plcBuffer));
 
-    // Initializing buffers
-    conn->buffer[PLC_INPUT_BUFFER]->data = (char*)plc_top_alloc(PLC_BUFFER_SIZE);
+	if (!isNetworkConnection) {
+#ifdef COMM_STANDALONE
+		if (fn == NULL) {
+			sz = strlen(plClientSharedDir) + 16;
+			fn = pmalloc(sz);
+		}
+		snprintf(fn, sz, "%s/in.shm", plClientSharedDir);
+		conn->buffer[PLC_INPUT_BUFFER]->data =
+			plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, fn, 'i', &id) +
+			PLC_BUFFER_HEADROOM;
+		conn->buffer[PLC_INPUT_BUFFER]->shmid = id;
+#else
+		conn->buffer[PLC_INPUT_BUFFER]->data = shm_in + PLC_BUFFER_HEADROOM;
+		conn->buffer[PLC_INPUT_BUFFER]->shmid = shm_in_id;
+#endif
+	} else {
+		conn->buffer[PLC_INPUT_BUFFER]->data = (char*)plc_top_alloc(PLC_BUFFER_SIZE);
+	}
+
     conn->buffer[PLC_INPUT_BUFFER]->bufSize = PLC_BUFFER_SIZE;
     conn->buffer[PLC_INPUT_BUFFER]->pStart = 0;
     conn->buffer[PLC_INPUT_BUFFER]->pEnd = 0;
-    conn->buffer[PLC_OUTPUT_BUFFER]->data = (char*)plc_top_alloc(PLC_BUFFER_SIZE);
+
+	if (!isNetworkConnection) {
+#ifdef COMM_STANDALONE
+		if (fn == NULL) {
+			sz = strlen(plClientSharedDir) + 16;
+			fn = pmalloc(sz);
+		}
+		snprintf(fn, sz, "%s/out.shm", plClientSharedDir);
+		conn->buffer[PLC_OUTPUT_BUFFER]->data =
+			plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, fn, 'o', &id) +
+			PLC_BUFFER_HEADROOM;
+		conn->buffer[PLC_OUTPUT_BUFFER]->shmid = id;
+#else
+		conn->buffer[PLC_OUTPUT_BUFFER]->data = shm_out + PLC_BUFFER_HEADROOM;
+		conn->buffer[PLC_OUTPUT_BUFFER]->shmid = shm_out_id;
+#endif
+
+	} else {
+		conn->buffer[PLC_OUTPUT_BUFFER]->data = (char*)plc_top_alloc(PLC_BUFFER_SIZE);
+	}
+
     conn->buffer[PLC_OUTPUT_BUFFER]->bufSize = PLC_BUFFER_SIZE;
     conn->buffer[PLC_OUTPUT_BUFFER]->pStart = 0;
     conn->buffer[PLC_OUTPUT_BUFFER]->pEnd = 0;
@@ -393,8 +607,15 @@ plcConn *plcConnect(int port) {
 void plcDisconnect(plcConn *conn) {
     if (conn != NULL) {
         close(conn->sock);
+#ifdef USE_SHM
+		shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
+		shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
+		shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
+		shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);
+#else
         pfree(conn->buffer[PLC_INPUT_BUFFER]->data);
         pfree(conn->buffer[PLC_OUTPUT_BUFFER]->data);
+#endif
         pfree(conn->buffer[PLC_INPUT_BUFFER]);
         pfree(conn->buffer[PLC_OUTPUT_BUFFER]);
         pfree(conn);

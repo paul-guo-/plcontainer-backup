@@ -877,6 +877,7 @@ static int receive_call(plcConn *conn, plcMessage **mCall) {
         for (i = 0; i < req->nargs && res == 0; i++)
             res |= receive_argument(conn, &req->args[i]);
     }
+
     debug_print(WARNING, "Finished call request for function '%s'", req->proc.name);
     return res;
 }
