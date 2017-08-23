@@ -23,9 +23,9 @@
 
 bool isNetworkConnection = false;
 #ifdef COMM_STANDALONE
-char *plClientSharedDir;
+char *plIpcClientSharedDir;
 #else
-char *plGpSharedDir;
+char *plIpcGpSharedDir;
 #endif
 
 static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len);
@@ -473,14 +473,14 @@ void
 plcPrepareIPC()
 {
 	char *fn = NULL;
-	int sz = strlen(plGpSharedDir) + 16;
+	int sz = strlen(plIpcGpSharedDir) + 16;
 
 	fn = pmalloc(sz);
 
-	snprintf(fn, sz, "%s/out.shm", plGpSharedDir);
+	snprintf(fn, sz, "%s/out.shm", plIpcGpSharedDir);
     shm_in = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, fn, 'o', &shm_in_id);
 
-	snprintf(fn, sz, "%s/in.shm", plGpSharedDir);
+	snprintf(fn, sz, "%s/in.shm", plIpcGpSharedDir);
     shm_out = plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, fn, 'i', &shm_out_id);
 
 	pfree(fn);
@@ -506,10 +506,10 @@ plcConn * plcConnInit(int sock) {
 	if (!isNetworkConnection) {
 #ifdef COMM_STANDALONE
 		if (fn == NULL) {
-			sz = strlen(plClientSharedDir) + 16;
+			sz = strlen(plIpcClientSharedDir) + 16;
 			fn = pmalloc(sz);
 		}
-		snprintf(fn, sz, "%s/in.shm", plClientSharedDir);
+		snprintf(fn, sz, "%s/in.shm", plIpcClientSharedDir);
 		conn->buffer[PLC_INPUT_BUFFER]->data =
 			plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, fn, 'i', &id) +
 			PLC_BUFFER_HEADROOM;
@@ -529,10 +529,10 @@ plcConn * plcConnInit(int sock) {
 	if (!isNetworkConnection) {
 #ifdef COMM_STANDALONE
 		if (fn == NULL) {
-			sz = strlen(plClientSharedDir) + 16;
+			sz = strlen(plIpcClientSharedDir) + 16;
 			fn = pmalloc(sz);
 		}
-		snprintf(fn, sz, "%s/out.shm", plClientSharedDir);
+		snprintf(fn, sz, "%s/out.shm", plIpcClientSharedDir);
 		conn->buffer[PLC_OUTPUT_BUFFER]->data =
 			plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, fn, 'o', &id) +
 			PLC_BUFFER_HEADROOM;
