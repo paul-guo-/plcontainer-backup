@@ -436,7 +436,8 @@ plc_shmset(size_t bytes, char *fn, int proj_id, int *id)
 		if (errno == EEXIST) {
 			shmid = shmget(key, bytes, 0600);
 			p = shmat(shmid, NULL, 0);
-		} else {
+		}
+		if (shmid < 0) {
 			lprintf(ERROR, "shmget fails (errno: %d) with filename %s, "
 					"projd_id %d, size: %ld\n", errno, fn, proj_id,
 					(unsigned long) bytes);
