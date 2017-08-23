@@ -433,15 +433,16 @@ plc_shmset(size_t bytes, char *fn, int proj_id, int *id)
 	}
 
 	if ((shmid = shmget(key, bytes, 0600|IPC_CREAT|IPC_EXCL)) < 0) {
-		if (errno == EEXIST) {
+		if (errno == EEXIST)
 			shmid = shmget(key, bytes, 0600);
-			p = shmat(shmid, NULL, 0);
-		}
+
 		if (shmid < 0) {
 			lprintf(ERROR, "shmget fails (errno: %d) with filename %s, "
 					"projd_id %d, size: %ld\n", errno, fn, proj_id,
 					(unsigned long) bytes);
 			p = NULL;
+		} else {
+			p = shmat(shmid, NULL, 0);
 		}
 	} else {
 		debug_print(WARNING, "shm create done by pid: %d\n", getpid());
