@@ -26,7 +26,7 @@
 
 extern bool isNetworkConnection;
 
-#define PLC_BUFFER_HEADROOM (8 + sizeof(sem_t))
+#define PLC_BUFFER_HEADROOM (2 * sizeof(int32) + sizeof(sem_t))
 
 typedef struct plcBuffer {
     char *data;

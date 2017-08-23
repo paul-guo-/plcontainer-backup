@@ -36,7 +36,7 @@ static int plcBufferMaybeResize (plcConn *conn, int bufType, size_t bufAppend);
 
 static void plcWriteBufHeadroom(plcBuffer *buf)
 {
-	volatile int *data_info = (int *)((char *) buf->data - 2 * sizeof(int));
+	volatile int *data_info = (int *)((char *) buf->data - 2 * sizeof(int32));
 
 	data_info[0] = buf->pStart;
 	data_info[1] = buf->pEnd;
@@ -46,7 +46,7 @@ static void plcWriteBufHeadroom(plcBuffer *buf)
 
 static void plcReadBufHeadroom(plcBuffer *buf)
 {
-	volatile int *data_info = (int *)((char *)buf->data - 2 * sizeof(int));
+	volatile int *data_info = (int *)((char *)buf->data - 2 * sizeof(int32));
 
 	buf->pStart = data_info[0];
 	buf->pEnd = data_info[1];
@@ -75,6 +75,7 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
 	 *    about the need of barrier.
 	 * 6) Better use wrapper functions in pg for IPC (at least for the QE side)
 	 */
+	/* FIXME: Add interrupt check here */
 	if (!isNetworkConnection) {
 	    plcBuffer *buf = conn->buffer[PLC_INPUT_BUFFER];
 		sem_t *sem = (sem_t *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
@@ -97,11 +98,6 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
 		/* ret value means nothing for us. */
 		return 1;
 	} else {
-		/*
-		 * FIXME: Let signal handler set global variable for termination/cancellation.
-		 * Add Code check here. e.g.
-		 * lprintf(ERROR, "Query and PL/Container connections are terminated by user request");
-		 */
 		do {
 			sz = recv(conn->sock, ptr, len, 0);
 		} while (sz < 0 && (errno == EAGAIN || errno == EINTR));
@@ -116,6 +112,7 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
 static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
     ssize_t sz;
 
+	/* FIXME: Add interrupt check here */
 	if (!isNetworkConnection) {
 		plcBuffer *buf = conn->buffer[PLC_OUTPUT_BUFFER];
 
@@ -138,11 +135,6 @@ static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
 
 		return len;
 	} else {
-		/*
-		 * FIXME: Let signal handler set global variable for termination/cancellation.
-		 * Add Code check here. e.g.
-		 * lprintf(ERROR, "Query and PL/Container connections are terminated by user request");
-		 */
 		do {
 			sz = send(conn->sock, ptr, len, 0);
 		} while (sz < 0 && (errno == EAGAIN || errno == EINTR));
@@ -189,7 +181,7 @@ static int plcBufferMaybeFlush (plcConn *conn, bool isForse) {
 		 * Do not reset for the non-network connection since the rx side is
 		 * probably consuming the data
 		 */
-		if (isNetworkConnection) {
+		if (!isNetworkConnection) {
 			res = plcBufferMaybeReset(conn, PLC_OUTPUT_BUFFER);
 			if (res < 0)
 				return res;
@@ -213,7 +205,7 @@ static int plcBufferMaybeReset (plcConn *conn, int bufType) {
     if (buf->pStart == buf->pEnd) {
         buf->pStart = 0;
         buf->pEnd = 0;
-		if (isNetworkConnection)
+		if (!isNetworkConnection)
 			plcWriteBufHeadroom(buf);
     }
 
@@ -225,7 +217,7 @@ static int plcBufferMaybeReset (plcConn *conn, int bufType) {
         memcpy(buf->data, buf->data + buf->pStart, buf->pEnd - buf->pStart);
         buf->pEnd = buf->pEnd - buf->pStart;
         buf->pStart = 0;
-		if (isNetworkConnection)
+		if (!isNetworkConnection)
 			plcWriteBufHeadroom(buf);
     }
 
