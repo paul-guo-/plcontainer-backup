@@ -505,10 +505,9 @@ plcConn * plcConnInit(int sock) {
 
 	if (!isNetworkConnection) {
 #ifdef COMM_STANDALONE
-		if (fn == NULL) {
-			sz = strlen(plIpcClientSharedDir) + 16;
+		sz = strlen(plIpcClientSharedDir) + 16;
+		if (fn == NULL)
 			fn = pmalloc(sz);
-		}
 		snprintf(fn, sz, "%s/in.shm", plIpcClientSharedDir);
 		conn->buffer[PLC_INPUT_BUFFER]->data =
 			plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, fn, 'i', &id) +
@@ -528,10 +527,9 @@ plcConn * plcConnInit(int sock) {
 
 	if (!isNetworkConnection) {
 #ifdef COMM_STANDALONE
-		if (fn == NULL) {
-			sz = strlen(plIpcClientSharedDir) + 16;
+		sz = strlen(plIpcClientSharedDir) + 16;
+		if (fn == NULL)
 			fn = pmalloc(sz);
-		}
 		snprintf(fn, sz, "%s/out.shm", plIpcClientSharedDir);
 		conn->buffer[PLC_OUTPUT_BUFFER]->data =
 			plc_shmset(PLC_BUFFER_SIZE + PLC_BUFFER_HEADROOM, fn, 'o', &id) +
