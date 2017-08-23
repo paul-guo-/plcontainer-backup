@@ -12,6 +12,7 @@
 #include "postgres.h"
 #include "regex/regex.h"
 
+#include "common/comm_connectivity.h"
 #include "plc_docker_curl_api.h"
 #include "plc_configuration.h"
 
@@ -320,7 +321,7 @@ int plc_docker_create_container(pg_attribute_unused() int sockfd, plcContainer *
             "    \"HostConfig\": {\n"
             "        \"Binds\": [%s],\n"
             "        \"Memory\": %lld,\n"
-            "        \"IpcMode\": \"host\",\n"
+            "%s" /* IpcMode */
             "        \"PublishAllPorts\": true\n"
             "    }\n"
             "}\n";
@@ -337,7 +338,8 @@ int plc_docker_create_container(pg_attribute_unused() int sockfd, plcContainer *
             cont->command,
             cont->dockerid,
             volumeShare,
-            ((long long)cont->memoryMb) * 1024 * 1024);
+            ((long long)cont->memoryMb) * 1024 * 1024,
+			isNetworkConnection ? "" : "\"IpcMode\": \"host\",\n");
 
     /* Make a call */
     response = plcCurlRESTAPICall(PLC_CALL_POST, "/containers/create", messageBody, 201, false);

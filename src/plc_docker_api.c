@@ -16,6 +16,7 @@
 #include "postgres.h"
 #include "regex/regex.h"
 
+#include "common/comm_connectivity.h"
 #include "plc_docker_api.h"
 #include "plc_configuration.h"
 
@@ -69,7 +70,7 @@ static char *plc_docker_create_request =
         "    \"HostConfig\": {\n"
         "        \"Binds\": [%s],\n"
         "        \"Memory\": %lld,\n"
-        "        \"IpcMode\": \"host\",\n"
+        "%s" /* IpcMode */
         "        \"PublishAllPorts\": true\n"
         "    }\n"
         "}\n";
@@ -489,7 +490,8 @@ int plc_docker_create_container(int sockfd, plcContainer *cont, char **name) {
             cont->command,
             cont->dockerid,
             sharing,
-            ((long long)cont->memoryMb) * 1024 * 1024);
+            ((long long)cont->memoryMb) * 1024 * 1024,
+			isNetworkConnection ? "" : "\"IpcMode\": \"host\",\n");
 
     /* Fill in the HTTP message */
     message = palloc(40 + strlen(plc_docker_post_message_json) + strlen(apiendpoint)
