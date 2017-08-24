@@ -52,12 +52,12 @@ plcontainer_cleanup(pg_attribute_unused() int code, pg_attribute_unused() Datum 
 	sem_t *sem;
 
 	if (conn_for_cleanup) {
-		sem = (sem_t *) ((char *) conn->buffer[PLC_INPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
+		sem = (sem_t *) ((char *) conn->buffer[PLC_INPUT_BUFFER]->data - sizeof(sem_t));
 		sem_destroy(sem);
 		shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
 		shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
 
-		sem = (sem_t *) ((char *) conn->buffer[PLC_OUTPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
+		sem = (sem_t *) ((char *) conn->buffer[PLC_OUTPUT_BUFFER]->data - sizeof(sem_t));
 		sem_destroy(sem);
 		shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
 		shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);

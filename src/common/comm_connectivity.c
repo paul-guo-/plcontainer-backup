@@ -448,7 +448,7 @@ plc_shmset(size_t bytes, char *fn, int proj_id, int *id)
 		debug_print(WARNING, "shm create done by pid: %d\n", getpid());
 		p = shmat(shmid, NULL, 0);
 		/* sem is at the beginning of the buffer. */
-		if (sem_init(p, 1, 0) != 0)
+		if (sem_init(p - sizeof(sem_t), 1, 0) != 0)
 			lprintf(ERROR, "sem_init() fails with errno %d", errno);
 	}
 
