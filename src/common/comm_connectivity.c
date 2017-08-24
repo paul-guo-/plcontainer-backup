@@ -448,7 +448,7 @@ plc_shmset(size_t bytes, char *fn, int proj_id, int *id)
 		debug_print(WARNING, "shm create done by pid: %d\n", getpid());
 		p = shmat(shmid, NULL, 0);
 		/* sem is at the beginning of the buffer. */
-		if (sem_init(p - sizeof(sem_t), 1, 0) != 0)
+		if (sem_init((sem_t *)((char *) p + PLC_BUFFER_HEADROOM - sizeof(sem_t)), 1, 0) != 0)
 			lprintf(ERROR, "sem_init() fails with errno %d", errno);
 	}
 
@@ -599,15 +599,17 @@ plcConn *plcConnect(int port) {
 void plcDisconnect(plcConn *conn) {
     if (conn != NULL) {
         close(conn->sock);
-#ifdef USE_SHM
-		shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
-		shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
-		shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
-		shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);
-#else
-        pfree(conn->buffer[PLC_INPUT_BUFFER]->data);
-        pfree(conn->buffer[PLC_OUTPUT_BUFFER]->data);
-#endif
+
+		if (!isNetworkConnection) {
+			shmdt(conn->buffer[PLC_INPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
+			shmctl(conn->buffer[PLC_INPUT_BUFFER]->shmid, IPC_RMID, NULL);
+			shmdt(conn->buffer[PLC_OUTPUT_BUFFER]->data - PLC_BUFFER_HEADROOM);
+			shmctl(conn->buffer[PLC_OUTPUT_BUFFER]->shmid, IPC_RMID, NULL);
+		} else {
+			pfree(conn->buffer[PLC_INPUT_BUFFER]->data);
+			pfree(conn->buffer[PLC_OUTPUT_BUFFER]->data);
+		}
+
         pfree(conn->buffer[PLC_INPUT_BUFFER]);
         pfree(conn->buffer[PLC_OUTPUT_BUFFER]);
         pfree(conn);
