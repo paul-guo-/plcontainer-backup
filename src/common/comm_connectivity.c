@@ -36,7 +36,7 @@ static int plcBufferMaybeResize (plcConn *conn, int bufType, size_t bufAppend);
 
 static void plcWriteBufHeadroom(plcBuffer *buf)
 {
-	volatile int *data_info = (int *)((char *) buf->data - 2 * sizeof(int32));
+	volatile int *data_info = (int *)((char *) buf->data - PLC_BUFFER_HEADROOM);
 
 	data_info[0] = buf->pStart;
 	data_info[1] = buf->pEnd;
@@ -46,7 +46,7 @@ static void plcWriteBufHeadroom(plcBuffer *buf)
 
 static void plcReadBufHeadroom(plcBuffer *buf)
 {
-	volatile int *data_info = (int *)((char *)buf->data - 2 * sizeof(int32));
+	volatile int *data_info = (int *)((char *)buf->data - PLC_BUFFER_HEADROOM);
 
 	buf->pStart = data_info[0];
 	buf->pEnd = data_info[1];
@@ -78,7 +78,7 @@ static ssize_t plcSocketRecv(plcConn *conn, void *ptr, size_t len) {
 	/* FIXME: Add interrupt check here */
 	if (!isNetworkConnection) {
 	    plcBuffer *buf = conn->buffer[PLC_INPUT_BUFFER];
-		sem_t *sem = (sem_t *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
+		sem_t *sem = (sem_t *) ((char *) buf->data - sizeof(sem_t));
 
 		debug_print(WARNING, "\n%s() begins: pid %d\n", __func__, getpid());
 
@@ -120,7 +120,7 @@ static ssize_t plcSocketSend(plcConn *conn, const void *ptr, size_t len) {
 
 		plcWriteBufHeadroom(buf);
 
-		sem_t *sem = (sem_t *) ((char *) buf->data - PLC_BUFFER_HEADROOM);
+		sem_t *sem = (sem_t *) ((char *) buf->data - sizeof(sem_t));
 
 		debug_print(WARNING, "  sem: %p", sem);
 
@@ -181,7 +181,7 @@ static int plcBufferMaybeFlush (plcConn *conn, bool isForse) {
 		 * Do not reset for the non-network connection since the rx side is
 		 * probably consuming the data
 		 */
-		if (!isNetworkConnection) {
+		if (isNetworkConnection) {
 			res = plcBufferMaybeReset(conn, PLC_OUTPUT_BUFFER);
 			if (res < 0)
 				return res;
