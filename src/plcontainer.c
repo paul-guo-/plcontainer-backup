@@ -204,7 +204,8 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
             elog(ERROR, "Container '%s' is not defined in configuration "
                         "and cannot be used", name);
         } else {
-			plcPrepareIPC();
+			if (!isNetworkConnection)
+				plcPrepareIPC();
             conn = start_container(cont);
 			conn_for_cleanup = conn;
         }
