@@ -39,7 +39,7 @@ ccp_options_anchor6: &ccp_options6
 
 ccp_destroy_anchor6: &ccp_destroy6
   put: terraform
-  tags: ["gpdb5_ccp_external_worker"]
+  tags: ["ccp"]
   params:
     action: destroy
     env_name_file: terraform/name
@@ -73,7 +73,7 @@ ccp_options_anchor7: &ccp_options7
 
 ccp_destroy_anchor7: &ccp_destroy7
   put: terraform
-  tags: ["gpdb5_ccp_external_worker"]
+  tags: ["ccp"]
   params:
     action: destroy
     env_name_file: terraform/name
@@ -84,7 +84,7 @@ ccp_destroy_anchor7: &ccp_destroy7
 debug_sleep_anchor7: &debug_sleep7
   do:
   - task: debug_sleep
-    tags: ["gpdb5_ccp_external_worker"]
+    tags: ["ccp"]
     config:
       platform: linux
       image_resource:
@@ -240,7 +240,7 @@ resources:
 
 - name: datascience-python-gp5
   type: s3
-  source: 
+  source:
     access_key_id: {{bucket-access-key-id}}
     bucket: {{pl-bucket-name}}
     region_name: {{aws-region}}
@@ -341,7 +341,7 @@ jobs:
   - task: plcontainer_gpdb_build
     file: plcontainer_src/concourse/tasks/plcontainer_build.yml
     image: centos-gpdb-dev-6
-    params: 
+    params:
       DEV_RELEASE: release
     input_mapping:
       bin_gpdb: bin_gpdb_centos6
@@ -404,7 +404,7 @@ jobs:
         aws_instance-node-instance_type: t2.medium
         platform: centos6
   - task: gen_cluster
-    tags: ["gpdb5_ccp_external_worker"]
+    tags: ["ccp"]
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
       <<: *ccp_gen_cluster_default_params
@@ -412,7 +412,7 @@ jobs:
     on_failure:
       <<: *ccp_destroy6
   - task: plcontainer
-    tags: ["gpdb5_ccp_external_worker"]
+    tags: ["ccp"]
     file: plcontainer_src/concourse/tasks/plcontainer_tests.yml
     params:
       platform: centos6
@@ -453,7 +453,7 @@ jobs:
         aws_instance-node-instance_type: t2.medium
         platform: centos6
   - task: gen_cluster
-    tags: ["gpdb5_ccp_external_worker"]
+    tags: ["ccp"]
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
       <<: *ccp_gen_cluster_default_params
@@ -461,7 +461,7 @@ jobs:
     on_failure:
       <<: *ccp_destroy6
   - task: plcontainer
-    tags: ["gpdb5_ccp_external_worker"]
+    tags: ["ccp"]
     file: plcontainer_src/concourse/tasks/plcontainer_perf.yml
     params:
       platform: centos6
@@ -511,7 +511,7 @@ jobs:
         aws_instance-node-instance_type: t2.medium
         platform: centos7
   - task: gen_cluster
-    tags: ["gpdb5_ccp_external_worker"]
+    tags: ["ccp"]
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
       <<: *ccp_gen_cluster_default_params
@@ -519,7 +519,7 @@ jobs:
     on_failure:
       <<: *ccp_destroy7
   - task: plcontainer
-    tags: ["gpdb5_ccp_external_worker"]
+    tags: ["ccp"]
     file: plcontainer_src/concourse/tasks/plcontainer_tests.yml
     params:
       platform: centos7
@@ -560,7 +560,7 @@ jobs:
         aws_instance-node-instance_type: t2.medium
         platform: centos7
   - task: gen_cluster
-    tags: ["gpdb5_ccp_external_worker"]
+    tags: ["ccp"]
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
       <<: *ccp_gen_cluster_default_params
@@ -568,7 +568,7 @@ jobs:
     on_failure:
       <<: *ccp_destroy7
   - task: plcontainer
-    tags: ["gpdb5_ccp_external_worker"]
+    tags: ["ccp"]
     file: plcontainer_src/concourse/tasks/plcontainer_perf.yml
     params:
       platform: centos7
@@ -588,7 +588,7 @@ jobs:
 
 
 
-- name: plcontainer_build_python_image 
+- name: plcontainer_build_python_image
   plan:
   - aggregate:
     - get: plcontainer_src
@@ -611,7 +611,7 @@ jobs:
         aws_instance-node-instance_type: t2.medium
         platform: centos7
   - task: gen_cluster
-    tags: ["gpdb5_ccp_external_worker"]
+    tags: ["ccp"]
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
       <<: *ccp_gen_cluster_default_params
@@ -619,7 +619,7 @@ jobs:
     on_failure:
       <<: *ccp_destroy7
   - task: docker_build
-    tags: ["gpdb5_ccp_external_worker"]
+    tags: ["ccp"]
     file: plcontainer_src/concourse/tasks/docker_build_python.yml
     params:
       DEV_RELEASE: release
@@ -658,7 +658,7 @@ jobs:
         aws_instance-node-instance_type: t2.medium
         platform: centos7
   - task: gen_cluster
-    tags: ["gpdb5_ccp_external_worker"]
+    tags: ["ccp"]
     file: ccp_src/ci/tasks/gen_cluster.yml
     params:
       <<: *ccp_gen_cluster_default_params
@@ -666,7 +666,7 @@ jobs:
     on_failure:
       <<: *ccp_destroy7
   - task: docker_build
-    tags: ["gpdb5_ccp_external_worker"]
+    tags: ["ccp"]
     file: plcontainer_src/concourse/tasks/docker_build_r.yml
     params:
       DEV_RELEASE: release
