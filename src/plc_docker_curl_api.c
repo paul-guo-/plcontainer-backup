@@ -20,6 +20,8 @@
 #include <string.h>
 #include <curl/curl.h>
 
+#define DEFAULT_COLLATION_OID 100
+
 // Default location of the Docker API unix socket
 static char *plc_docker_socket = "/var/run/docker.sock";
 
@@ -194,7 +196,7 @@ static int docker_parse_container_id(char* response, char **name) {
     mask = (pg_wchar *) palloc((masklen + 1) * sizeof(pg_wchar));
     wmasklen = pg_mb2wchar_with_len(plc_docker_containerid_regex, mask, masklen);
 
-    res = pg_regcomp(&preg, mask, wmasklen, REG_ADVANCED);
+    res = pg_regcomp(&preg, mask, wmasklen, REG_ADVANCED, DEFAULT_COLLATION_OID);
     pfree(mask);
     if (res < 0) {
         elog(ERROR, "Cannot compile Postgres regular expression: '%s'", strerror(errno));
@@ -261,7 +263,7 @@ static int docker_parse_port_mapping(char* response, int *port) {
     mask = (pg_wchar *) palloc((masklen + 1) * sizeof(pg_wchar));
     wmasklen = pg_mb2wchar_with_len(plc_docker_port_regex, mask, masklen);
 
-    res = pg_regcomp(&preg, mask, wmasklen, REG_ADVANCED);
+    res = pg_regcomp(&preg, mask, wmasklen, REG_ADVANCED, DEFAULT_COLLATION_OID);
     pfree(mask);
     if (res < 0) {
         elog(ERROR, "Cannot compile Postgres regular expression: '%s'", strerror(errno));
@@ -319,7 +321,7 @@ int plc_docker_create_container(int sockfd UNUSED, plcContainer *cont, char **na
             "        \"PublishAllPorts\": true\n"
             "    }\n"
             "}\n";
-    char *volumeShare = get_sharing_options(cont);
+    char *volumeShare = NULL; //get_sharing_options(cont);
     char *messageBody = NULL;
     plcCurlBuffer *response = NULL;
     int res = 0;

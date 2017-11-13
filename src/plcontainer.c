@@ -176,7 +176,7 @@ static plcProcResult *plcontainer_get_result(FunctionCallInfo  fcinfo,
     conn = find_container(name);
     if (conn == NULL) {
         plcContainer *cont = NULL;
-        cont = plc_get_container_config(name);
+//        cont = plc_get_container_config(name);
         if (cont == NULL) {
             elog(ERROR, "Container '%s' is not defined in configuration "
                         "and cannot be used", name);

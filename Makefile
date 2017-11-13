@@ -16,19 +16,19 @@ else
 endif
 
 # Directories
+
 SRCDIR = ./src
 MGMTDIR = ./management
 DOCKERFILEDIR = ./dockerfiles
 PYCLIENTDIR = src/pyclient/bin
 RCLIENTDIR = src/rclient/bin
 
+EXTENSION = plj
+MODULE_big = plj
+
 # Files to build
 FILES = $(shell find $(SRCDIR) -not -path "*client*" -type f -name "*.c")
 OBJS = $(foreach FILE,$(FILES),$(subst .c,.o,$(FILE)))
-
-PGXS := $(shell pg_config --pgxs)
-include $(PGXS)
-
 # Curl
 CURL_CONFIG = $(shell type -p curl-config || echo no)
 ifneq ($(CURL_CONFIG),no)
@@ -45,20 +45,24 @@ else
   $(info curl-config is not found, building with default Docker API interface)
 endif
 
+
+PG_CONFIG = pg_config
+PGXS := $(shell $(PG_CONFIG) --pgxs)
+include $(PGXS)
+
+ifeq ($(PORTNAME), darwin)
+        DYSUFFIX = dylib
+        DLPREFIX = libR
+else
+        ifeq ($(PORTNAME), win32)
+                DLPREFIX = R
+        else
+                DLPREFIX = libR
+        endif
+endif
+
+override CFLAGS+=-I/usr/local/opt/libxml2/include/libxml2 -DCOMM_STANDALONE
 PLCONTAINERDIR = $(DESTDIR)$(datadir)/plcontainer
-
-all: all-lib
-
-install: all installdirs install-lib install-extra
-
-installdirs: installdirs-lib
-	$(MKDIR_P) '$(DESTDIR)$(bindir)'
-	$(MKDIR_P) '$(PLCONTAINERDIR)'
-
-.PHONY: uninstall
-uninstall: uninstall-lib
-	rm -f '$(DESTDIR)$(bindir)/plcontainer-config'
-	rm -rf '$(PLCONTAINERDIR)'
 
 .PHONY: install-extra
 install-extra: xmlconfig

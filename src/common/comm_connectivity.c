@@ -321,8 +321,10 @@ int plcBufferFlush (plcConn *conn) {
 plcConn * plcConnInit(int sock) {
     plcConn *conn;
 
+    lprintf(DEBUG1, "before alloc" );
     // Initializing main structures
     conn = (plcConn*)plc_top_alloc(sizeof(plcConn));
+    lprintf(DEBUG1, "allocated conn" );
     conn->buffer[PLC_INPUT_BUFFER]  = (plcBuffer*)plc_top_alloc(sizeof(plcBuffer));
     conn->buffer[PLC_OUTPUT_BUFFER] = (plcBuffer*)plc_top_alloc(sizeof(plcBuffer));
 
@@ -338,6 +340,7 @@ plcConn * plcConnInit(int sock) {
 
     // Initializing control parameters
     conn->sock = sock;
+    lprintf(DEBUG1, "created conn" );
 
     return conn;
 }
@@ -381,7 +384,7 @@ plcConn *plcConnect(int port) {
     tv.tv_sec  = 0;
     tv.tv_usec = 500000;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(struct timeval));
-
+    lprintf(DEBUG1, "GOT HERE");
     result = plcConnInit(sock);
 
     return result;
