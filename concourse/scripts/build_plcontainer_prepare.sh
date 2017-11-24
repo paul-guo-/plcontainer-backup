@@ -7,6 +7,8 @@ TOP_DIR=${CWDIR}/../../../
 source "${TOP_DIR}/gpdb_src/concourse/scripts/common.bash"
 
 function _main() {
+  
+  # setup gpdb environment
   install_gpdb
   ${TOP_DIR}/gpdb_src/concourse/scripts/setup_gpadmin_user.bash "centos"
   make_cluster
