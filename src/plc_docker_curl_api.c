@@ -9,9 +9,9 @@
 #include "postgres.h"
 #include "utils/guc.h"
 #include "libpq/libpq.h"
-
-#include "plc_docker_api_common.h"
+#include "miscadmin.h"
 #include "libpq/libpq-be.h"
+#include "plc_docker_api_common.h"
 #include "cdb/cdbvars.h"
 
 #include <stdio.h>
@@ -235,7 +235,7 @@ int plc_docker_create_container(plcContainerConf *conf, char **name, int contain
 	plcCurlBuffer *response = NULL;
 	int res = 0;
 	int createStringSize = 0;
-	const char *username = MyProcPort->user_name;
+	const char *username = GetUserNameFromId(GetUserId());
 	const char *dbname = MyProcPort->database_name;
 
 	if (has_error == true) {
@@ -435,7 +435,7 @@ int plc_docker_list_container(char **result) {
 	char *url = NULL;
 	int res = 0;
 
-	url = palloc(strlen(method) + 8);
+	url = (char *) palloc((strlen(method) + 12) * sizeof(char));
 	sprintf(url, method, GpIdentity.dbid);
 
 	response = plcCurlRESTAPICall(PLC_HTTP_GET, url, NULL);

@@ -1,0 +1,36 @@
+select count(*) from plcontainer_containers_summary();
+ count 
+-------
+     0
+(1 row)
+
+CREATE ROLE pluser;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+SET ROLE pluser;
+CREATE OR REPLACE FUNCTION pyconf() RETURNS int4 AS $$
+# container: plc_python_shared
+return 10
+$$ LANGUAGE plcontainer;
+SET ROLE gpadmin;
+SELECT pyconf();
+ pyconf 
+--------
+     10
+(1 row)
+
+select count(*) from plcontainer_containers_summary();
+ count 
+-------
+     1
+(1 row)
+
+SET ROLE pluser;
+select count(*) from plcontainer_containers_summary();
+ count 
+-------
+     0
+(1 row)
+
+SET ROLE gpadmin;
+DROP FUNCTION pyconf();
+DROP ROLE pluser;
