@@ -1,9 +1,7 @@
-/*------------------------------------------------------------------------------
- *
- * Copyright (c) 2016-Present Pivotal Software, Inc
- *
- *------------------------------------------------------------------------------
- */
+/*
+* Portions Copyright 1994-2004 The PL-J Project. All rights reserved.
+* Portions Copyright © 2016-Present Pivotal Software, Inc.
+*/
 
 
 /* Postgres Headers */
