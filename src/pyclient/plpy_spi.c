@@ -13,8 +13,6 @@
 #include "pyerror.h"
 #include "pyconversions.h"
 
-#include <Python.h>
-
 #define dgettext(d, x) (x)
 
 typedef struct PLySubtransactionObject {
@@ -43,6 +41,37 @@ static void
 PLy_exception_set(PyObject *, const char *, ...)
 __attribute__((format(printf, 2, 3)));
 
+static void PLy_add_exceptions(PyObject *plpy);
+
+static PyObject *PLy_exc_spi_error = NULL;
+
+static PyMethodDef PLy_exc_methods[] = {
+	{NULL, NULL, 0, NULL}
+};
+
+#if PY_MAJOR_VERSION >= 3
+static PyModuleDef PLy_module = {
+	PyModuleDef_HEAD_INIT,		/* m_base */
+	"plpy",						/* m_name */
+	NULL,						/* m_doc */
+	-1,							/* m_size */
+	PLy_methods,				/* m_methods */
+};
+
+static PyModuleDef PLy_exc_module = {
+	PyModuleDef_HEAD_INIT,		/* m_base */
+	"spiexceptions",			/* m_name */
+	NULL,						/* m_doc */
+	-1,							/* m_size */
+	PLy_exc_methods,			/* m_methods */
+	NULL,						/* m_reload */
+	NULL,						/* m_traverse */
+	NULL,						/* m_clear */
+	NULL						/* m_free */
+};
+
+PLyInit_plpy(void);
+#endif
 
 static PyMethodDef PLy_subtransaction_methods[] = {
 	{"__enter__", PLy_subtransaction_enter, METH_VARARGS, NULL},
@@ -325,7 +354,7 @@ PLy_spi_execute(PyObject *self UNUSED, PyObject *args) {
 	    is_PLyPlanObject(plan))
 		return PLy_spi_execute_plan(plan, list, limit);
 
-	raise_execution_error("plpy.execute expected a query or a plan");
+	PLy_exception_set(PLy_exc_spi_error, "plpy.execute expected a query or a plan");
 	return NULL;
 }
 
@@ -336,8 +365,8 @@ PLy_spi_execute_plan(PyObject *ob, PyObject *list, long limit) {
 	plcMsgSQL msg;
 	plcMsgResult *resp;
 	PyObject *pyresult,
-		*pydict,
-		*pyval;
+			 *pydict,
+			 *pyval;
 	plcPyResult *result;
 	plcConn *conn = plcconn_global;
 	plcArgument *args;
@@ -345,7 +374,7 @@ PLy_spi_execute_plan(PyObject *ob, PyObject *list, long limit) {
 
 	if (list != NULL) {
 		if (!PySequence_Check(list) || PyString_Check(list) || PyUnicode_Check(list)) {
-			raise_execution_error("plpy.execute takes a sequence as its second argument");
+			PLy_exception_set(PyExc_TypeError, "plpy.execute takes a sequence as its second argument");
 			return NULL;
 		}
 		nargs = PySequence_Length(list);
@@ -355,7 +384,8 @@ PLy_spi_execute_plan(PyObject *ob, PyObject *list, long limit) {
 	py_plan = (PLyPlanObject *) ob;
 
 	if (py_plan->nargs != nargs) {
-		raise_execution_error("plpy.execute takes bad argument number: %d vs expected %d", nargs, py_plan->nargs);
+		PLy_exception_set(PyExc_TypeError, "plpy.execute takes bad argument number: %d vs expected %d",
+			nargs, py_plan->nargs);
 		return NULL;
 	}
 
@@ -377,7 +407,8 @@ PLy_spi_execute_plan(PyObject *ob, PyObject *list, long limit) {
 			if (Ply_get_output_function(py_plan->argtypes[j])(elem, &args[j].data.value, NULL) < 0) {
 				/* Free allocated memory. */
 				free_arguments(args, j + 1, false, false);
-				raise_execution_error("Failed to convert data in pexecute");
+				Py_DECREF(elem);
+				PLy_exception_set(PyExc_TypeError, "Failed to convert data in pexecute");
 				return NULL;
 			}
 		} else {
@@ -398,7 +429,7 @@ PLy_spi_execute_plan(PyObject *ob, PyObject *list, long limit) {
 
 	resp = (plcMsgResult *) receive_from_frontend();
 	if (resp == NULL) {
-		raise_execution_error("Error receiving data from frontend");
+		PLy_exception_set(PLy_exc_spi_error, "Error receiving data from frontend");
 		return NULL;
 	}
 
@@ -407,13 +438,13 @@ PLy_spi_execute_plan(PyObject *ob, PyObject *list, long limit) {
 	 * so if resp->cols > 0, it must be SELECT statment.
 	 */
 	if (resp->cols == 0) {
-		debug_print(WARNING, "the rows is %d", resp->rows);
+		lprintf(DEBUG1, "the rows is %d", resp->rows);
 		PyObject *nrows = PyInt_FromLong((long) resp->rows);
 		/* only need one element for number of rows are processed*/
 		pyresult = PyList_New(1);
 
 		if (PyList_SetItem(pyresult, 0, nrows) == -1) {
-			raise_execution_error("Cannot set item for python spi");
+			PLy_exception_set(PLy_exc_spi_error, "Cannot set item for python spi");
 			Py_XDECREF(nrows);
 			Py_XDECREF(pyresult);
 			pyresult = NULL;
@@ -435,8 +466,9 @@ PLy_spi_execute_plan(PyObject *ob, PyObject *list, long limit) {
 
 	for (j = 0; j < result->res->cols; j++) {
 		if (result->args[j].conv.inputfunc == NULL) {
-			raise_execution_error("Type %d is not yet supported by Python container",
-			                      (int) result->args[j].type);
+			PLy_exception_set(PyExc_TypeError, "Type %d is not yet supported by Python container",
+						                      (int) result->args[j].type);
+			Py_DECREF(pyresult);
 			pyresult = NULL;
 			goto ret;
 		}
@@ -529,7 +561,8 @@ PLy_subtransaction_dealloc(PyObject *subxact UNUSED) {
  */
 static PyObject *
 PLy_subtransaction_enter(PyObject *self, PyObject *unused UNUSED) {
-		lprintf(DEBUG1, "Subtransaction enter");
+
+	lprintf(DEBUG1, "Subtransaction enter");
 	plcConn *conn = plcconn_global;
 	PLySubtransactionObject *subxact = (PLySubtransactionObject *) self;
 
@@ -595,7 +628,7 @@ PLy_subtransaction_enter(PyObject *self, PyObject *unused UNUSED) {
  */
 static PyObject *
 PLy_subtransaction_exit(PyObject *self, PyObject *args) {
-		lprintf(DEBUG1, "Subtransaction exit");
+	lprintf(DEBUG1, "Subtransaction exit");
 	plcConn *conn = plcconn_global;
 	PyObject *type;
 	PyObject *value;
@@ -685,13 +718,13 @@ PLy_spi_execute_query(char *query, long limit) {
 	 * so if resp->cols > 0, it must be SELECT statment.
 	 */
 	if (resp->cols == 0) {
-		debug_print(WARNING, "the rows is %d", resp->rows);
+		lprintf(DEBUG1, "the rows is %d", resp->rows);
 		PyObject *nrows = PyInt_FromLong((long) resp->rows);
 		/* only need one element for number of rows are processed*/
 		pyresult = PyList_New(1);
 
 		if (PyList_SetItem(pyresult, 0, nrows) == -1) {
-			raise_execution_error("Cannot set item for python spi");
+			PLy_exception_set(PLy_exc_spi_error, "Cannot set item for python spi");
 			Py_XDECREF(nrows);
 			Py_XDECREF(pyresult);
 			pyresult = NULL;
@@ -713,8 +746,8 @@ PLy_spi_execute_query(char *query, long limit) {
 
 	for (j = 0; j < result->res->cols; j++) {
 		if (result->args[j].conv.inputfunc == NULL) {
-			raise_execution_error("Type %d is not yet supported by Python container",
-			                      (int) result->args[j].type);
+			PLy_exception_set(PyExc_TypeError, "Type %d is not yet supported by Python container",
+						                      (int) result->args[j].type);
 			Py_DECREF(pyresult);
 			pyresult = NULL;
 			goto ret;
@@ -740,7 +773,7 @@ PLy_spi_execute_query(char *query, long limit) {
 				                                       &result->args[j]);
 
 				if (PyDict_SetItemString(pydict, result->res->names[j], pyval) != 0) {
-					raise_execution_error("Error setting result dictionary element for type %d",
+					PLy_exception_set(PyExc_TypeError, "Error setting result dictionary element for type %d",
 					                      (int) result->res->types[j].type);
 					Py_XDECREF(pyval);
 					Py_DECREF(pydict);
@@ -789,7 +822,8 @@ PyObject *PLy_spi_prepare(PyObject *self UNUSED, PyObject *args) {
 		return NULL;
 
 	if (list && (!PySequence_Check(list))) {
-		raise_execution_error("second argument of plpy.prepare must be a sequence");
+		PLy_exception_set(PyExc_TypeError,
+								  "second argument of plpy.prepare must be a sequence");
 		return NULL;
 	}
 
@@ -831,7 +865,7 @@ PyObject *PLy_spi_prepare(PyObject *self UNUSED, PyObject *args) {
 
 	res = plcontainer_channel_receive(conn, &resp, MT_RAW_BIT);
 	if (res < 0) {
-		raise_execution_error("Error receiving data from the frontend, %d", res);
+		PLy_exception_set(PLy_exc_spi_error, "Error receiving data from the frontend, %d", res);
 		return NULL;
 	}
 
@@ -901,5 +935,53 @@ PLy_exception_set(PyObject *exc, const char *fmt, ...) {
 	vsnprintf(buf, sizeof(buf), dgettext(TEXTDOMAIN, fmt), ap);
 	va_end(ap);
 
+	lprintf(DEBUG1, "Python caught an exception: %s", buf);
+
 	PyErr_SetString(exc, buf);
 }
+
+void Ply_spi_exception_init(PyObject *plpy)
+{
+	PLy_add_exceptions(plpy);
+}
+
+/*
+ * Add exception object to Python, currently only SPIError is needed.
+ */
+static void
+PLy_add_exceptions(PyObject *plpy)
+{
+	PyObject   *excmod;
+
+#if PY_MAJOR_VERSION < 3
+	excmod = Py_InitModule("spiexceptions", PLy_exc_methods);
+#else
+	excmod = PyModule_Create(&PLy_exc_module);
+#endif
+	if (PyModule_AddObject(plpy, "spiexceptions", excmod) < 0)
+		raise_execution_error("failed to add the spiexceptions module");
+
+	Py_INCREF(excmod);
+
+	PLy_exc_spi_error = PyErr_NewException("plpy.SPIError", NULL, NULL);
+
+	Py_INCREF(PLy_exc_spi_error);
+	PyModule_AddObject(plpy, "SPIError", PLy_exc_spi_error);
+
+}
+
+#if PY_MAJOR_VERSION >= 3
+static PyMODINIT_FUNC
+PLyInit_plpy(void)
+{
+	PyObject   *m;
+
+	m = PyModule_Create(&PLy_module);
+	if (m == NULL)
+		return NULL;
+
+	PLy_add_exceptions(m);
+
+	return m;
+}
+#endif
