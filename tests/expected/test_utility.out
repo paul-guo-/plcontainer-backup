@@ -15,8 +15,8 @@ positional arguments:
                         host
     runtime-delete      Delete a given container runtime configuration on all
                         hosts
-    runtime-edit        Use editor to edit and then update configurations on
-                        all hosts
+    runtime-edit        Use editor (vi by default) to edit and then update
+                        configurations on all hosts
     runtime-backup      Backup the local runtime configurations to a file
     runtime-restore     Restore the runtime configurations from a file and
                         distribute them to all hosts
