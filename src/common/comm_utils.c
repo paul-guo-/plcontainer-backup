@@ -1,7 +1,8 @@
 /*------------------------------------------------------------------------------
  *
  *
- * Copyright (c) 2016, Pivotal.
+ * Portions Copyright (c) 2016, Pivotal.
+ * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  *
  *------------------------------------------------------------------------------
  */
@@ -26,6 +27,30 @@ char *plc_top_strdup(char *str) {
 }
 
 #else
+
+/*
+ * This function is copied from is_log_level_output in elog.c
+ */
+int
+is_write_log(int elevel, int log_min_level)
+{
+	if (elevel == LOG || elevel == COMMERROR)
+	{
+		if (log_min_level == LOG || log_min_level <= ERROR)
+			return 1;
+	}
+	else if (log_min_level == LOG)
+	{
+		/* elevel != LOG */
+		if (elevel >= FATAL)
+			return 1;
+	}
+	/* Neither is LOG */
+	else if (elevel >= log_min_level)
+		return 1;
+
+	return 0;
+}
 
 void *pmalloc(size_t size) {
 	void *addr = malloc(size);
