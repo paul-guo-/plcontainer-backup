@@ -20,7 +20,6 @@ CREATE OR REPLACE FUNCTION pydef1(i integer) RETURNS integer AS $$
 return i+2
 $$ LANGUAGE plcontainer;
 select pydef1(1);
-WARNING:  hit this
  pydef1 
 --------
       3
