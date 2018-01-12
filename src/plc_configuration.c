@@ -68,7 +68,13 @@ static void init_runtime_configurations() {
 	hash_ctl.keysize = RUNTIME_ID_MAX_LENGTH;
 	hash_ctl.entrysize = sizeof(runtimeConfEntry);
 	hash_ctl.hash = string_hash;
-
+	/*
+	 * Key and value of hash table share the same storage of entry.
+	 * the first keysize bytes of the entry is the hash key, and the
+	 * value if the entry itself.
+	 * For string key, we use string_hash to caculate hash key and
+	 * use strlcpy to copy key(when string_hash is set as hash function).
+	 */
 	rumtime_conf_table = hash_create("runtime configuration hash",
 								MAX_EXPECTED_RUNTIME_NUM,
 								&hash_ctl,
@@ -130,7 +136,9 @@ static void parse_runtime_configuration(xmlNode *node) {
 		if (id_num == 0) {
 			plc_elog(ERROR, "tag <id> must be specified in configuartion");
 		}
-
+		if ( strlen((char *)runtime_id) > RUNTIME_ID_MAX_LENGTH - 1) {
+			plc_elog(ERROR, "runtime id should not be longer than 63 bytes.");
+		}
 		/* find the corresponding runtime config*/
 		conf_entry = (runtimeConfEntry *) hash_search(rumtime_conf_table,  (const void *) runtime_id, HASH_ENTER, &foundPtr);
 
@@ -418,7 +426,7 @@ static int plc_refresh_container_config(bool verbose) {
 	LIBXML_TEST_VERSION
 
 	/* Parse the file and get the DOM */
-	sprintf(filename, "%s/plcontainer_configuration.xml", data_directory);
+	sprintf(filename, "%s/%s", data_directory, PLC_PROPERTIES_FILE);
 
 	PG_TRY();
 	{
